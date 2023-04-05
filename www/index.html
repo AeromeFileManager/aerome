@@ -1,0 +1,182 @@
+<!--
+  Copyright (c) 2023 Jesse Tuchsen
+ 
+  This file is part of Aerome.
+ 
+  Aerome is free software: you can redistribute it and/or modify it under the terms of the GNU
+  General Public License as published by the Free Software Foundation, version 3 of the License.
+ 
+  Aerome is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+  the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+  Public License for more details.
+ 
+  You should have received a copy of the GNU General Public License along with Aerome. If not, see
+  <https://www.gnu.org/licenses/>.
+-->
+<!doctype html>
+
+<style>
+    @keyframes open {
+        0% { opacity: 0 }
+        100% { opacity: 1 }
+    }
+
+    /* closing animation */
+    @keyframes close {
+        0% { opacity: 1 }
+        100% { opacity: 0 }
+    }
+
+    details[open] summary~* {
+        animation: open .5s
+    }
+
+    /* closing class */
+    details.closing summary~* {
+        animation: close .5s
+    }
+
+    html, body {
+        background: #1a1919;
+        color: antiquewhite;
+    }
+    html, body {
+        background: #1a1919;
+        color: antiquewhite; 
+    }
+    body {
+        padding-bottom: 40px;
+    }
+    #files li {
+        padding-bottom: 4px;
+    }
+    #actions li {
+        padding-bottom: 10px;
+    }
+    ul { padding: 0; margin: 10px; list-style-type: none; }
+    h1 { font-size: 18px; }
+    h2 { font-size: 14px; }
+
+    input#action {
+        position: fixed;
+        bottom: 4px;
+        left: 4px;
+        right: 4px;
+        height: 32px;
+        opacity: 0.7;
+        padding-left: 12px;
+        -webkit-backdrop-filter: blur(8px);
+    }
+</style>
+<body>
+    <header>
+        <button id="back">Back</button>
+        <h1 id="folder"></h1>
+    </header>
+
+    <ul id="files">
+
+    </ul>
+
+    <ul id="actions">
+
+    </ul>
+
+    <input type="text" id="action" />
+
+    <script>
+        let rpc = {
+            invoke(arg) {
+                window.ipc.postMessage(JSON.stringify(arg));
+            }
+        };
+
+        document.getElementById('back').addEventListener('click', e => {
+            rpc.invoke({ cmd: "back" });
+        });
+
+        document.getElementById('action').addEventListener('keypress', e => {
+            if (e.key !== 'Enter') return;
+
+            const input = e.target.closest('input');
+            if (!input) return;
+
+            rpc.invoke({
+                cmd: 'communicate',
+                message: input.value
+            })
+        })
+
+        document.getElementById('files').addEventListener('click', e => {
+            const li = e.target.closest('li');
+            if (!li) return;
+            rpc.invoke({ cmd: 'forward', to: li.textContent });
+        });
+
+        document.getElementById('actions').addEventListener('click', e => {
+            const li = e.target.closest('li');
+            if (!li) return;
+        });
+
+        window.onload = () => {
+            rpc.invoke({ cmd : 'init' });
+        };
+
+        window.setFolder = ({ path, files }) => {
+            document.getElementById('files').innerHTML = '';
+            document.getElementById('folder').textContent = path;
+
+            for (const file of files) {
+                const li = document.createElement('li');
+                li.textContent = file;
+                document.getElementById('files').append(li);
+            }
+        };
+
+        window.setDescription = ({ path, actions }) => {
+            document.getElementById('actions').innerHTML = '';
+
+            for (const action of actions) {
+                const li = document.createElement('li');
+                const details = document.createElement('details');
+                const summary = document.createElement('summary');
+                const p = document.createElement('p');
+
+                summary.textContent = action.title;
+                p.textContent = action.description;
+
+                details.append(summary);
+                details.append(p);
+
+                li.append(details);
+
+                details.addEventListener("click", detailsAnimationOpen.bind(details, details));
+                details.addEventListener("animationend", detailsAnimationEnd.bind(details, details));
+                document.getElementById('actions').append(li);
+            }
+        };
+
+        function relayMessage(cmd) {
+            if (window.external !== undefined) {
+                return window.external.invoke(cmd);
+            } else if (window.webkit.messageHandlers.external !== undefined) {
+                return window.webkit.messageHandlers.external.postMessage(cmd);
+            }
+            throw new Error('Failed to locate webkit external handler')
+        }
+
+        function detailsAnimationOpen(details, e) {
+            if (details.hasAttribute("open")) {
+                e.preventDefault();
+                details.classList.add("closing");
+            }
+        }
+
+        function detailsAnimationEnd(details, e) {
+            if (e.animationName === "close") {
+                details.removeAttribute("open");
+                details.classList.remove("closing");
+            }
+        }
+    </script>
+</body>

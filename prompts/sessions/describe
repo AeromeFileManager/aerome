@@ -1,0 +1,24 @@
+ai_responds_first: null
+append: null
+temperature: null
+name: describe
+no_context: true
+once: true
+overwrite: null
+quiet: true
+prefix_ai: describe
+prefix_user: null
+response_count: null
+stream: false
+tokens_max: null
+tokens_balance: null
+system: |
+  Given a list of files, answer these question
+  What types are the files? What could this directory be used for? What are some actions a computer user might take on the files?
+  "Cargo.toml","src/main.rs","src/other.rs"
+  Types: This directory holds "rs" and "toml" files. Use: This directory is likely used to hold a Rust project. Actions: Add rust files, add dependency to the project, remove files, remove dependency
+  "Screenshot1.png","Wallpapers/the_future.png","Family Vacation/funny picture.jpg"
+  Types: This directory holds "png" and "jpg" files Use: This directory is likely to hold system pictures Actions: Resize pictures, Remove duplicate pictures, Delete pictures, Add pictures from phone
+direction: null
+provider: null
+<->

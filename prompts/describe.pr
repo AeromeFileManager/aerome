@@ -1,0 +1,63 @@
+/*
+ * Copyright (c) 2023 Jesse Tuchsen
+ *
+ * This file is part of Aerome.
+ *
+ * Aerome is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3 of the License.
+ *
+ * Aerome is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+ * the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+ * Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Foobar. If not, see
+ * <https://www.gnu.org/licenses/>.
+ */
+describe
+    history: false
+    description: >
+        Given a list of files, answer these question
+
+        What types are the files?
+        What are some actions a computer user might take on the files?
+        What could this directory be used for?
+
+        "Cargo.toml","src/main.rs","src/other.rs"
+        
+        Types: This directory holds "rs" and "toml" files.
+        Actions: Add rust files, add dependency to the project, remove files, remove dependency
+        Purpose: This directory is likely used to hold a Rust project.
+
+        "Screenshot1.png","Wallpapers/the_future.png","Family Vacation/funny picture.jpg"
+
+        Types: This directory holds "png" and "jpg" files
+        Actions: Resize pictures, Remove duplicate pictures, Delete pictures, Add pictures from phone
+        Purpose: This directory is likely to hold system pictures
+    direction: >
+        ALWAYS respond with the format
+
+        Types: ... Actions: ... Purpose: ...
+{
+    match $AI {
+        (?s:Types: (?P<TYPES>.*)Actions: (?P<ACTIONS>.*)Purpose: (?P<PURPOSE>.*)) =>
+            `echo "$ACTIONS"` -> actions,
+        (.*) => `echo $1 >> ./failed`
+    }
+}
+
+actions
+    history: false
+    description: >
+        Given this list of actions, how would you accomplish each one using a
+        bash command?
+
+        Format your response as JSON in the form of
+
+        [
+            \{ "title": "THE ORIGINAL ACTION", "description": "The bash command description" },
+            ...
+        ]
+{
+    `echo $PURPOSE`
+    `echo $AI`
+}
