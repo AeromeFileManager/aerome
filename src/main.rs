@@ -46,7 +46,7 @@ fn main() -> wry::Result<()> {
         investigate(&rt, (*folder.lock().unwrap()).clone(), proxy.clone()));
 
     let handler_folder = folder.clone();
-    let handler = move |_: &Window, req: String| {
+    let handler = move |window: &Window, req: String| {
         match serde_json::from_str(req.as_str()).unwrap() {
             Cmd::Back => {
                 let mut unlocked = handler_folder.lock().unwrap();
@@ -81,12 +81,16 @@ fn main() -> wry::Result<()> {
                 *ongoing = investigate(&rt, unlocked.clone(), proxy.clone());
                 */
             },
+            Cmd::Window(WindowCmd::Drag) => {
+                let _ = window.drag_window();
+            },
             _ => {}
         }
     };
 
     let window = WindowBuilder::new()
         .with_title("Hello World")
+        .with_decorations(false)
         .build(&event_loop)?;
 
     let webview = WebViewBuilder::new(window)?
@@ -234,7 +238,7 @@ struct Task {
     done: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
     Init,
@@ -244,7 +248,17 @@ pub enum Cmd {
     },
     Communicate {
         message: String
-    }
+    },
+    Window(WindowCmd)
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "window", rename_all = "camelCase")]
+pub enum WindowCmd {
+    Close,
+    Drag,
+    Maximize,
+    Minimize
 }
 
 enum UserEvent {

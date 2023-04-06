@@ -84,11 +84,22 @@
         padding-left: 12px;
         -webkit-backdrop-filter: blur(8px);
     }
+
+    header {
+        display: grid;
+        padding: 5px;
+        grid-template-columns: 80px 1fr;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    header h1 {
+        
+    }
 </style>
 <body>
     <header>
         <button id="back">Back</button>
-        <h1 id="folder"></h1>
+        <h1 id="folder" class="titlebar"></h1>
     </header>
 
     <ul id="files">
@@ -210,5 +221,18 @@
                 details.classList.remove("closing");
             }
         }
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('titlebar') && e.buttons === 1) {
+                rpc.invoke({ cmd: 'window', window: 'drag' });
+                //e.detail === 2
+                    //? window.ipc.postMessage()
+            }
+        });
+
+        document.addEventListener('touchstart', (e) => {
+            if (e.target.classList.contains('.titlebar')) {
+                window.ipc.postMessage('drag_window');
+            }
+        });
     </script>
 </body>
