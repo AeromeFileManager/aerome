@@ -31,9 +31,11 @@ use wry::{
         event_loop::{ControlFlow,EventLoop,EventLoopProxy},
         window::{WindowBuilder,Window},
     },
-    webview::WebViewBuilder,
+    http::{header::CONTENT_TYPE,Response},
+    webview::WebViewBuilder
 };
-use models::{Description,Folder};
+use models::{Description,Folder,File};
+use wry::webview::Url;
 
 fn main() -> wry::Result<()> {
     let folder = Arc::new(Mutex::new(get_folder(current_dir().unwrap())));
@@ -56,10 +58,12 @@ fn main() -> wry::Result<()> {
                         folder: (*unlocked).clone()
                     });
 
+                    /*
                     let mut ongoing = investigation.lock().unwrap();
                     ongoing.abort();
 
                     *ongoing = investigate(&rt, unlocked.clone(), proxy.clone());
+                    */
                 }
             },
             Cmd::Forward { to } => {
@@ -70,10 +74,12 @@ fn main() -> wry::Result<()> {
                     folder: (*unlocked).clone()
                 });
 
+                /*
                 let mut ongoing = investigation.lock().unwrap();
                 ongoing.abort();
 
                 *ongoing = investigate(&rt, unlocked.clone(), proxy.clone());
+                */
             },
             _ => {}
         }
@@ -86,6 +92,24 @@ fn main() -> wry::Result<()> {
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
         .with_ipc_handler(handler)
+        .with_custom_protocol("thumbnail".into(), |req| {
+            // https://specifications.freedesktop.org/thumbnail-spec/thumbnail-spec-latest.html
+
+            let hash = req.uri().host().unwrap();
+            let path = format!("/home/linuser/.cache/thumbnails/large/{}.png", hash);
+
+            Response::builder()
+                .header(CONTENT_TYPE, "image/png")
+                .body(std::fs::read(&path)
+                    .or_else(|_| {
+                        let path = format!("/home/linuser/.cache/thumbnails/medium/{}.png", hash);
+                        std::fs::read(&path)
+                    })
+                    .or_else(|_| std::fs::read("./assets/e08239b208f592aa0081561aecb42a3b.png"))
+                    .unwrap()
+                    .into())
+                .map_err(Into::into)
+        })
         .build()?;
 
     let event_loop_folder = folder.clone();
@@ -133,7 +157,7 @@ fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -
 
         let mut stdin = cmd.stdin.take().unwrap();
         let files = folder.files.iter()
-            .map(|f| format!("{}", f))
+            .map(|f| format!("{}", f.name))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -163,17 +187,45 @@ fn get_folder(path: PathBuf) -> Folder {
             .unwrap()
             .into_iter()
             .filter_map(|entry|
-                entry.map(|entry| entry.file_name().to_string_lossy().into_owned()).ok()
+                entry
+                    .map(|entry| {
+                        let name = entry.file_name().to_string_lossy().into_owned();
+                        let ext = name.split('.').rev().next();
+                        let thumbnail = if ext == Some("png") {
+                            /*
+                                .parse::<Uri>()
+                                .unwrap();
+                            let uri = format!("{}", url);
+                            */
+
+                            Some(generate_thumbnail_hash(entry.path().to_str().unwrap()))
+                        } else {
+                            None
+                        };
+
+                        File {
+                            name,
+                            thumbnail
+                        }
+                    })
+                    .ok()
             )
-            .collect()
+            .collect::<Vec<File>>()
     } else {
         vec![]
     };
+
+    println!("{:?}", files);
 
     Folder {
         path,
         files
     }
+}
+
+fn generate_thumbnail_hash(s: &str) -> String {
+    println!("{}", s);
+    format!("{:x}", md5::compute(&Url::parse(&format!("file://{s}")).unwrap().to_string()))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

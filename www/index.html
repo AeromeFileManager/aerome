@@ -54,6 +54,23 @@
         padding-bottom: 10px;
     }
     ul { padding: 0; margin: 10px; list-style-type: none; }
+
+    ul#files {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-gap: 15px;
+    }
+    ul#files > li {
+        display: flex;
+        flex-direction: column;
+        max-height: 180px;
+    }
+
+    ul#files > li > .image {
+        min-height: 160px;
+        max-height: 160px;
+    }
+
     h1 { font-size: 18px; }
     h2 { font-size: 14px; }
 
@@ -128,7 +145,22 @@
 
             for (const file of files) {
                 const li = document.createElement('li');
-                li.textContent = file;
+                const span = document.createElement('span');
+
+                if (file.thumbnail) {
+                    const thumbnail = document.createElement('img');
+                    thumbnail.src = 'thumbnail://' + file.thumbnail;
+                    thumbnail.className = 'image';
+                    li.append(thumbnail);
+                } else {
+                    const dummy = document.createElement('div');
+                    dummy.className = 'image';
+                    li.append(dummy);
+                }
+
+                span.textContent = file.name;
+                li.append(span);
+
                 document.getElementById('files').append(li);
             }
         };

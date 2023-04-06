@@ -20,7 +20,13 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Folder {
     pub path: PathBuf,
-    pub files: Vec<String>,
+    pub files: Vec<File>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct File {
+    pub name: String,
+    pub thumbnail: Option<String>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
