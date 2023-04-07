@@ -47,12 +47,26 @@
     body {
         padding-bottom: 40px;
     }
+
+    header {
+        display: grid;
+        padding: 5px;
+        grid-template-columns: 80px 1fr;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    header h1 {
+        
+    }
+
+    h1 { font-size: 18px; }
+
+    h2 { font-size: 14px; }
+
     #files li {
         padding-bottom: 4px;
     }
-    #actions li {
-        padding-bottom: 10px;
-    }
+
     ul { padding: 0; margin: 10px; list-style-type: none; }
 
     ul#files {
@@ -71,29 +85,73 @@
         max-height: 160px;
     }
 
-    h1 { font-size: 18px; }
-    h2 { font-size: 14px; }
-
-    input#action {
+    #action-wrapper {
         position: fixed;
-        bottom: 4px;
-        left: 4px;
-        right: 4px;
-        height: 32px;
+        bottom: 0px;
+        left: 0px;
+        right: 0px;
+        height: 42px;
         opacity: 0.7;
         padding-left: 12px;
         -webkit-backdrop-filter: blur(8px);
+        transition: height 0.25s ease-in-out, background 0.2s ease-in-out;
+        color: black;
+        background: transparent;
     }
 
-    header {
-        display: grid;
-        padding: 5px;
-        grid-template-columns: 80px 1fr;
-        -webkit-user-select: none;
-        user-select: none;
+    #action-wrapper.open {
+        height: 200px;
+        background: rgba(240,240,240, 0.9);
     }
-    header h1 {
-        
+
+    #action-wrapper input#action {
+        height: 32px;
+        position: absolute;
+        bottom: 5px;
+        left: 5px;
+        right: 5px;
+        text-align: center;
+    }
+
+    #action-wrapper ul#actions {
+        position: absolute;
+        top: 32px;
+        left: 0;
+        right: 0;
+        z-index: -1;
+        transition: margin 0.4s ease-out, color 0.4s ease-in;
+        color: rgba(0,0,0,0);
+    }
+
+    #action-wrapper.open ul#actions {
+        margin-top: -32px;
+        color: rgba(0,0,0,1);
+    }
+
+    #action-wrapper ~ #action-suggestions {
+        position: fixed;
+        bottom: 8px;
+        left: 8px;
+        height: 32px;
+        -webkit-appearance: none;
+        background: rgb(247, 247, 247);
+        border-bottom-left-radius: 4px;
+        border-top-left-radius: 4px;
+        border: 1px solid rgb(193, 193, 193);
+        color: rgb(42, 42, 42);
+    }
+
+    #action-wrapper ~ #action-submit {
+        position: fixed;
+        bottom: 8px;
+        right: 8px;
+        height: 32px;
+        -webkit-appearance: none;
+        background: rgb(247, 247, 247);
+        border-bottom-right-radius: 4px;
+        border-top-right-radius: 4px;
+        border: 1px solid rgb(193, 193, 193);
+        color: rgb(42, 42, 42);
     }
 </style>
 <body>
@@ -106,11 +164,19 @@
 
     </ul>
 
-    <ul id="actions">
+    <div id="action-wrapper">
+        <input type="text" id="action" />
 
-    </ul>
+        <ul id="actions">
 
-    <input type="text" id="action" />
+        </ul>
+    </div>
+
+    <button
+        id="action-suggestions"
+        onclick="this.previousElementSibling.classList.toggle('open')">Suggestions</button>
+
+    <button id="action-submit">Conversation</button>
 
     <script>
         let rpc = {
