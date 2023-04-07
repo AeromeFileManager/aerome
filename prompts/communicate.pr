@@ -1,0 +1,36 @@
+# Action to find a bash script to execute the requested commands
+
+explore
+    history: false
+    description: >
+        Is it possible to write a bash script to accomplish what the user is
+        asking for? It's ok to say no. Explain your answers, starts every
+        response with either a "Yes" or a "No".
+
+        Can we move every file that starts with "Screenshot" into a screenshots directory?
+        Yes, it's possible to do that with mkdir and mv
+{
+    match $AI {
+        (?i:^Yes) => `echo $USER` -> command,
+        (?is:^No[,|.]?\s*(.*)) => `
+            echo "FAILURE:$1"
+        `,
+        (?s:.*) => `
+            mkdir -p ./failures;
+            echo "$AI" >> ./failures/explore;
+            echo "FAILURE:I'm sorry I don't understand, can you try again?"
+        `
+    }
+}
+
+command
+    history: false
+    description: >
+        Write a bash script to accomplish this task. OUTPUT JUST THE SCRIPT,
+        and nothing else
+{
+    match $AI {
+        (?s:```(?:bash|sh)?\s*(?:#!/bin/bash)?\s*(.*)\s*```) => `echo "SUCCESS:$1"`,
+        (?s:.*) => `echo -e "$0" >> failures/command`
+    }
+}

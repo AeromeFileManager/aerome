@@ -1,0 +1,49 @@
+---
+command:
+    expected: ^SUCCESS:foobar\s*$
+    tests:
+        - user: ""
+          ai: >
+            ```
+            foobar
+            ```
+        - user: ""
+          ai: >
+            I'm gonna talk about stuff even you told me not to
+
+            ```bash
+            foobar
+            ```
+        - user: ""
+          ai: >
+            I'm gonna talk about stuff even you told me not to
+
+            ```
+            #!/bin/bash
+            foobar
+            ```
+        - user: ""
+          ai: >
+            Here's a bash script to remove all markdown files:
+
+            ```bash
+            #!/bin/bash
+
+            foobar
+
+            ```
+
+            Make sure to replace `<directory-path>` with the path to the directory where the markdown files are located. 
+
+            Note: Please be cautious while running this script as it will permanently delete all markdown files in the specified directory.
+        - user: ""
+          ai: >
+            Here's a possible bash script that removes all Markdown files in the current working directory:
+
+            ```bash
+            #!/bin/bash
+
+            foobar
+            ```
+
+            Save this script as a `.sh` file, make it executable using `chmod +x script.sh`, and then run it in the terminal with `./script.sh`. It will delete all files with the extension `.md` in the current directory and its subdirectories.

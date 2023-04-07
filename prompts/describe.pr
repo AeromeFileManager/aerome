@@ -41,7 +41,8 @@ describe
     match $AI {
         (?s:Types: (?P<TYPES>.*)Actions: (?P<ACTIONS>.*)Purpose: (?P<PURPOSE>.*)) =>
             `echo "$ACTIONS"` -> actions,
-        (.*) => `echo $1 >> ./failed`
+        (.*) =>
+            `echo $1 >> ./failed`
     }
 }
 

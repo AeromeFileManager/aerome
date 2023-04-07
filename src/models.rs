@@ -30,7 +30,7 @@ pub struct File {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Description {
+pub struct Suggestions {
     pub purpose: String,
     pub actions: Vec<Action>
 }

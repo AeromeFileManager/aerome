@@ -14,9 +14,9 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+mod ipc;
 mod models;
 
-use serde::{Deserialize,Serialize};
 use tokio::{runtime::{Runtime},process::Command};
 use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
 use tokio::task::AbortHandle;
@@ -34,7 +34,8 @@ use wry::{
     http::{header::CONTENT_TYPE,Response},
     webview::WebViewBuilder
 };
-use models::{Description,Folder,File};
+use models::{Suggestions,Folder,File};
+use ipc::*;
 use wry::webview::Url;
 
 fn main() -> wry::Result<()> {
@@ -84,6 +85,9 @@ fn main() -> wry::Result<()> {
             Cmd::Window(WindowCmd::Drag) => {
                 let _ = window.drag_window();
             },
+            Cmd::Communicate { message } => {
+                communicate(&rt, &message, proxy.clone());
+            },
             _ => {}
         }
     };
@@ -127,18 +131,28 @@ fn main() -> wry::Result<()> {
                 webview.evaluate_script(&format!("setFolder({})", &stringified)).unwrap();
             },
 
-            Event::UserEvent(UserEvent::UpdateDescription { description }) => {
+            Event::UserEvent(UserEvent::UpdateSuggestions { description }) => {
                 let stringified = serde_json::to_string(&description).unwrap();
-                webview.evaluate_script(&format!("setDescription({})", &stringified)).unwrap();
+                webview.evaluate_script(&format!("setSuggestions({})", &stringified)).unwrap();
             },
     
             Event::UserEvent(UserEvent::UpdateFolder { folder }) => {
                 let stringified = serde_json::to_string(&folder).unwrap();
                 webview.evaluate_script(&format!("setFolder({})", &stringified)).unwrap();
             },
+            Event::UserEvent(UserEvent::Ai(response)) => match response {
+                AiResponse::Success(success) => {
+                    let message = "Sure, I can do that. Please review this script before evaluating it:";
+                    let code = success.replace('`', "\\`");
+                    let script = &format!("addConversationItem('ai', `{message}`, `{code}`)");
 
-            Event::UserEvent(UserEvent::ExecEval()) => {
-                webview.evaluate_script("alert('works')").unwrap();
+                    webview.evaluate_script(script).unwrap();
+                },
+                AiResponse::Failure(failure) => {
+                    let message = failure.replace('`', "\\`");
+                    webview.evaluate_script(&format!("addConversationItem('ai', `{}`)", message))
+                        .unwrap();
+                },
             },
 
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } =>
@@ -147,6 +161,43 @@ fn main() -> wry::Result<()> {
             _ => (),
         }
     });
+
+    Ok(())
+}
+
+fn communicate(rt: &Runtime, message: &str, proxy: EventLoopProxy<UserEvent>) {
+    let message = message.to_string();
+
+    rt.spawn(async move {
+        let result = run_prompt("prompts/communicate.pr", message.as_bytes()).await;
+        let (kind, message) = result.split_once(":")
+            .unwrap_or_else(|| ("FAILURE", "I'm sorry I don't understand, can you try again?"));
+
+        proxy.send_event(UserEvent::Ai(match kind {
+            "SUCCESS" => AiResponse::Success(message.to_string()),
+            _ => AiResponse::Failure(message.to_string()),
+        }));
+    });
+}
+
+async fn run_prompt(prompt_path: &str, input: &[u8]) -> String {
+    let path = std::env::current_dir().unwrap().join("./bin/prompt");
+    let mut cmd = Command::new(path)
+        .arg(prompt_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let mut stdin = cmd.stdin.take().unwrap();
+    stdin.write_all(input).await.unwrap();
+    stdin.write_all(b"\n").await.unwrap();
+
+    let mut stdout = cmd.stdout.take().unwrap();
+    let mut result = String::new();
+    stdout.read_to_string(&mut result).await.unwrap();
+
+    result
 }
 
 fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -> AbortHandle {
@@ -176,12 +227,14 @@ fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -
         let purpose = lines.next().unwrap().replace("\"", "\\\"");
         let actions = lines.next().unwrap();
 
-        proxy.send_event(UserEvent::UpdateDescription {
+        /*
+        proxy.send_event(UserEvent::UpdateSuggestions {
             description: serde_json::from_str(&format!(r#"{{
                 "purpose": "{purpose}",
                 "actions": {actions}
             }}"#)).unwrap()
         });
+        */
     }).abort_handle()
 }
 
@@ -196,12 +249,6 @@ fn get_folder(path: PathBuf) -> Folder {
                         let name = entry.file_name().to_string_lossy().into_owned();
                         let ext = name.split('.').rev().next();
                         let thumbnail = if ext == Some("png") {
-                            /*
-                                .parse::<Uri>()
-                                .unwrap();
-                            let uri = format!("{}", url);
-                            */
-
                             Some(generate_thumbnail_hash(entry.path().to_str().unwrap()))
                         } else {
                             None
@@ -219,8 +266,6 @@ fn get_folder(path: PathBuf) -> Folder {
         vec![]
     };
 
-    println!("{:?}", files);
-
     Folder {
         path,
         files
@@ -228,45 +273,5 @@ fn get_folder(path: PathBuf) -> Folder {
 }
 
 fn generate_thumbnail_hash(s: &str) -> String {
-    println!("{}", s);
     format!("{:x}", md5::compute(&Url::parse(&format!("file://{s}")).unwrap().to_string()))
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Task {
-    name: String,
-    done: bool,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(tag = "cmd", rename_all = "camelCase")]
-pub enum Cmd {
-    Init,
-    Back,
-    Forward {
-        to: String
-    },
-    Communicate {
-        message: String
-    },
-    Window(WindowCmd)
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(tag = "window", rename_all = "camelCase")]
-pub enum WindowCmd {
-    Close,
-    Drag,
-    Maximize,
-    Minimize
-}
-
-enum UserEvent {
-    ExecEval(),
-    UpdateFolder {
-        folder: Folder
-    },
-    UpdateDescription {
-        description: Description
-    }
 }
