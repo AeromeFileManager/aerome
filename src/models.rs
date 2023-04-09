@@ -16,6 +16,7 @@
 
 use serde::{Serialize,Deserialize};
 use std::path::PathBuf;
+use url::Url;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Folder {
@@ -26,7 +27,7 @@ pub struct Folder {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct File {
     pub name: String,
-    pub thumbnail: Option<String>
+    pub graphic: Option<Url>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -39,4 +40,24 @@ pub struct Suggestions {
 pub struct Action {
     pub title: String,
     pub description: String
+}
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Options {
+    pub sort: Sort,
+    pub sort_folders_first: bool,
+    pub sort_show_hidden: bool,
+    pub grid_scale: f32
+}
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub enum Sort {
+    #[default]
+    #[serde(rename = "a-z")]
+    AToZ,
+    #[serde(rename = "z-a")]
+    ZToA,
+    #[serde(rename = "date")]
+    Date,
 }

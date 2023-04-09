@@ -15,6 +15,13 @@
 -->
 <!doctype html>
 
+<!--These icons are preloaded because otherwise the hamburger menu hangs a bit on 1st open-->
+<!--
+<link rel="preload" href="icon://view-sort-descending-symbolic?size=32" as="image">
+<link rel="preload" href="icon://view-sort-ascending-symbolic?size=32" as="image">
+<link rel="preload" href="icon://stopwatch-symbolic?size=32" as="image">
+-->
+
 <style>
     @keyframes open {
         0% { opacity: 0 }
@@ -40,10 +47,7 @@
         background: #1a1919;
         color: antiquewhite;
     }
-    html, body {
-        background: #1a1919;
-        color: antiquewhite; 
-    }
+
     body {
         padding-bottom: 40px;
     }
@@ -51,17 +55,100 @@
     header {
         display: grid;
         padding: 5px;
-        grid-template-columns: 80px 1fr;
+        grid-template-columns: 80px 1fr 1fr;
+        grid-template-rows: 46px;
         -webkit-user-select: none;
         user-select: none;
     }
 
-    header h1 {
-        
+    header .menu {
+        background-image: url("icon://open-menu-symbolic?size=32");
+        background-repeat: no-repeat;
+        background-position: center;
+        width: 42px;
+        height: 42px;
+    }
+
+    header .menu .content {
+        display: flex;
+        position: absolute;
+        justify-content: center;
+        top: 55px;
+        width: 200px;
+        height: 280px;
+        background: white;
+        border-radius: 10px;
+        z-index: 2;
+    }
+
+    header .menu .content form {
+        padding: 10px;
+        margin: 10px;
+        color: black;
+    }
+
+    header .menu .content form > :is(input, fieldset, label) {
+        margin-bottom: 20px;
+    }
+
+    header .menu .content form fieldset {
+        border: 0;
+    }
+
+    header .menu .content form fieldset input {
+        appearance: none;
+        width: 30px;
+        height: 30px;
+        background-repeat: no-repeat;
+        background-position: center;
+        transition: all 0.2s ease-out;
+        border: 0.1px solid transparent;
+        border-radius: 4px;
+    }
+
+    header .menu .content form fieldset input:checked {
+        filter: brightness(0);
+        transform: scale(1.1);
+        border-color: black;
+    }
+
+    header .menu .content form fieldset input:nth-child(1) {
+        background-image: url(icon://view-sort-descending-symbolic?size=32);
+    }
+    header .menu .content form fieldset input:nth-child(2) {
+        background-image: url(icon://view-sort-ascending-symbolic?size=32);
+    }
+
+    header .menu .content form fieldset input:nth-child(3) {
+        background-image: url(icon://stopwatch-symbolic?size=32);
+    }
+
+    header .menu .content form label {
+        display: block;
+    }
+
+    header .menu .content h2 {
+        font-size: 18px;
+        margin: 0;
+        margin-bottom: 6px;
+        padding: 0;
+    }
+
+    header .menu .content:not(.showing) {
+        display: none;
+    }
+
+    header .menu .tap-area {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+    }
+
+    header .menu .content:not(.showing) ~ .tap-area {
+        display: none;
     }
 
     h1 { font-size: 18px; }
-
     h2 { font-size: 14px; }
 
     #files li {
@@ -71,20 +158,27 @@
     ul { padding: 0; margin: 10px; list-style-type: none; }
 
     ul#files {
+        --grid-size: calc(120px + 100px * var(--grid-scale, 0.35));
+
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        grid-gap: 15px;
+        grid-template-columns: repeat(auto-fit, minmax(var(--grid-size), 1fr));
+        grid-gap: 30px;
     }
 
     ul#files > li {
         display: flex;
         flex-direction: column;
-        max-height: 180px;
+        max-height: calc(var(--grid-size) - 20px);
     }
 
     ul#files > li > .image {
-        min-height: 160px;
-        max-height: 160px;
+        min-height: calc(var(--grid-size) - 40px);
+        max-height: calc(var(--grid-size) - 40px);
+        object-fit: contain;
+    }
+
+    ul#files > li > span {
+        text-align: center;
     }
 
     #action-wrapper {
@@ -252,11 +346,55 @@
             width: 1.25em;    
         }
     }
+
+    input[type=range] {
+        appearance: none;
+        width: 100%;
+        background: transparent;
+        height: 2px;
+        background: black;
+    }
+
 </style>
 <body>
     <header>
         <button id="back">Back</button>
         <h1 id="folder" class="titlebar"></h1>
+        <div>
+            <div class="menu"
+                onclick="event.target.matches('.tap-area, .menu') && this.firstElementChild.classList.toggle('showing')">
+                <div class="content">
+                    <form>
+                        <h2>Scale</h2>
+                        <input class="grid-scale" type="range" min=0 max=1 value=0.4 step=0.01
+                            oninput="future.settings.gridScale = this.value" />
+
+                        <h2>Sort</h2>
+
+                        <fieldset id="sort"
+                            onchange="future.settings.sort = this.querySelector(':checked').value">
+                            <input type="radio" name="sort" value="a-z" />
+                            <input type="radio" name="sort" value="z-a" />
+                            <input type="radio" name="sort" value="date" />
+                        </fieldset>
+
+                        <label>
+                            <input id="sort_folders_first" type="checkbox" name="folders_first"
+                                onchange="future.settings.sortFoldersFirst = this.checked" />
+                            Folders first
+                        </label>
+
+                        <label>
+                            <input id="sort_show_hidden" type="checkbox" name="show_hidden"
+                                onchange="future.settings.sortShowHidden = this.checked" />
+                            Show hidden
+                        </label>
+                    </form>
+                </div>
+
+                <div class="tap-area" aria-hidden=true></div>
+            </div>
+        </div>
     </header>
 
     <ul id="files">
@@ -285,6 +423,49 @@
     </div>
 
     <script>
+        window.future = {
+            settings: {
+                get sort() {
+                    return localStorage.sort.toLowerCase();
+                },
+                set sort(sort) {
+                    sort = sort.toLowerCase();
+                    localStorage.sort = sort;
+
+                    document
+                        .querySelector(`header #sort [value="${sort}"]`)
+                        .checked = true;
+
+                    notifyOptionsUpdate();
+                },
+                get sortFoldersFirst() {
+                    return localStorage.sortFoldersFirst === 'true'
+                },
+                set sortFoldersFirst(sort) {
+                    document.querySelector('header #sort_folders_first').checked = ('' + sort) === 'true';
+                    localStorage.sortFoldersFirst = sort;
+                    notifyOptionsUpdate();
+                },
+                get sortShowHidden() {
+                    return localStorage.sortShowHidden === 'true'
+                },
+                set sortShowHidden(sort) {
+                    document.querySelector('header #sort_show_hidden').checked = ('' + sort) === 'true';
+                    localStorage.sortShowHidden = sort;
+                    notifyOptionsUpdate();
+                },
+                get gridScale() {
+                    return +localStorage.gridScale;
+                },
+                set gridScale(scale) {
+                    localStorage.gridScale = scale;
+                    document.querySelector('header .grid-scale').value = scale;
+                    document.getElementById('files').style.setProperty('--grid-scale', scale);
+                    console.log('f');
+                }
+            }
+        };
+
         let rpc = {
             invoke(arg) {
                 window.ipc.postMessage(JSON.stringify(arg));
@@ -292,7 +473,7 @@
         };
 
         document.getElementById('back').addEventListener('click', e => {
-            rpc.invoke({ cmd: "back" });
+            rpc.invoke({ cmd: 'back', options: future.settings });
         });
 
         document.getElementById('action').addEventListener('keypress', e => {
@@ -304,12 +485,12 @@
             const message = input.value;
 
             addConversationItem('user', message);
-        })
+        });
 
         document.getElementById('files').addEventListener('click', e => {
             const li = e.target.closest('li');
             if (!li) return;
-            rpc.invoke({ cmd: 'forward', to: li.textContent });
+            rpc.invoke({ cmd: 'forward', to: li.textContent, options: future.settings });
         });
 
         document.getElementById('actions').addEventListener('click', e => {
@@ -337,11 +518,11 @@
                 const li = document.createElement('li');
                 const span = document.createElement('span');
 
-                if (file.thumbnail) {
-                    const thumbnail = document.createElement('img');
-                    thumbnail.src = 'thumbnail://' + file.thumbnail;
-                    thumbnail.className = 'image';
-                    li.append(thumbnail);
+                if (file.graphic) {
+                    const graphic = document.createElement('img');
+                    graphic.src = file.graphic;
+                    graphic.className = 'image';
+                    li.append(graphic);
                 } else {
                     const dummy = document.createElement('div');
                     dummy.className = 'image';
@@ -452,5 +633,22 @@
                 window.ipc.postMessage('drag_window');
             }
         });
+
+        const debounce = (delay, cb) => {
+            let id;
+            return (...args) => {
+                if (id) clearTimeout(id);
+                id = setTimeout(() => {
+                    cb(...args);
+                    id = null;
+                }, delay);
+            };
+        };
+
+        const notifyOptionsUpdate = debounce(250, () => {
+            rpc.invoke({ cmd: 'options', options: future.settings });
+        });
+
+        Object.assign(future.settings, future.settings);
     </script>
 </body>

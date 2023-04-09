@@ -1949,6 +1949,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "url",
  "wry",
 ]
 
@@ -1988,6 +1989,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

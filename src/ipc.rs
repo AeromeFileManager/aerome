@@ -15,19 +15,25 @@
  */
 
 use serde::{Deserialize,Serialize};
-use crate::{Folder,Suggestions};
+use crate::{Folder,Suggestions,Options};
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
-    Back,
+    Back {
+        options: Options
+    },
     Forward {
-        to: String
+        to: String,
+        options: Options
+    },
+    Options {
+        options: Options
     },
     Communicate {
         message: String
     },
-    Window(WindowCmd)
+    Window(WindowCmd),
 }
 
 #[derive(Deserialize, Serialize)]

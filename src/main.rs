@@ -16,7 +16,11 @@
 
 mod ipc;
 mod models;
+mod icons;
 
+use ipc::*;
+use models::{Suggestions,Folder,File,Options,Sort};
+use icons::Icons;
 use tokio::{runtime::{Runtime},process::Command};
 use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
 use tokio::task::AbortHandle;
@@ -25,6 +29,8 @@ use std::process::Stdio;
 use std::sync::{Arc,Mutex};
 use std::env::current_dir;
 use std::fs;
+use std::cmp::Ordering;
+use std::time::Duration;
 use wry::{
     application::{
         event::{Event,StartCause,WindowEvent},
@@ -34,26 +40,28 @@ use wry::{
     http::{header::CONTENT_TYPE,Response},
     webview::WebViewBuilder
 };
-use models::{Suggestions,Folder,File};
-use ipc::*;
-use wry::webview::Url;
+use url::Url;
+use std::path::Path;
+use std::thread;
 
 fn main() -> wry::Result<()> {
-    let folder = Arc::new(Mutex::new(get_folder(current_dir().unwrap())));
+    let folder = Arc::new(Mutex::new(get_folder(&current_dir().unwrap(), &Options::default())));
     let event_loop = EventLoop::<UserEvent>::with_user_event();
     let proxy = event_loop.create_proxy();
     let rt = Runtime::new().unwrap();
+    let theme = get_icon_theme(&rt);
     let investigation: Mutex<AbortHandle> = Mutex::new(
         investigate(&rt, (*folder.lock().unwrap()).clone(), proxy.clone()));
 
     let handler_folder = folder.clone();
     let handler = move |window: &Window, req: String| {
+
         match serde_json::from_str(req.as_str()).unwrap() {
-            Cmd::Back => {
+            Cmd::Back { options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
 
                 if let Some(parent) = unlocked.path.parent() {
-                    *unlocked = get_folder(parent.to_owned());
+                    *unlocked = get_folder(&parent, &options);
 
                     proxy.send_event(UserEvent::UpdateFolder {
                         folder: (*unlocked).clone()
@@ -67,9 +75,9 @@ fn main() -> wry::Result<()> {
                     */
                 }
             },
-            Cmd::Forward { to } => {
+            Cmd::Forward { to, options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
-                *unlocked = get_folder(unlocked.path.join(to));
+                *unlocked = get_folder(&unlocked.path.join(to), &options);
 
                 proxy.send_event(UserEvent::UpdateFolder {
                     folder: (*unlocked).clone()
@@ -88,18 +96,57 @@ fn main() -> wry::Result<()> {
             Cmd::Communicate { message } => {
                 communicate(&rt, &message, proxy.clone());
             },
+            Cmd::Options { options } => {
+                //window.set_visible(true);
+
+
+                let mut unlocked = handler_folder.lock().unwrap();
+                *unlocked = get_folder(&unlocked.path, &options);
+
+                proxy.send_event(UserEvent::UpdateFolder {
+                    folder: (*unlocked).clone()
+                });
+            },
             _ => {}
         }
     };
 
     let window = WindowBuilder::new()
-        .with_title("Hello World")
+        .with_title("Future")
         .with_decorations(false)
         .build(&event_loop)?;
 
+    //window.set_visible(false);
+
+    let icons = Arc::new(Mutex::new(Icons::default()));
+    cache_hamburger_icons(&theme, &icons);
+
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
+        .with_background_color((0, 0, 0, 1))
         .with_ipc_handler(handler)
+        .with_custom_protocol("icon".into(), move |req| {
+            let mut ic = icons.lock().unwrap();
+            let icon = req.uri().host().unwrap();
+            let size = Url::parse(&format!("{}", req.uri())).unwrap().query_pairs()
+                .find(|(name, _)| &*name == "size")
+                .map(|(_, val)| val.to_owned().parse::<i32>().unwrap())
+                .unwrap_or(256);
+
+            let path = ic.find(&theme, icon, size, 1).unwrap();
+
+            let content_type = match path.extension().map(|s| s.to_str().unwrap()) {
+                Some("png") => "image/png",
+                Some("svg") => "image/svg+xml",
+                Some("xpm") => panic!("No idea what to do here"),
+                _ => unreachable!()
+            };
+
+            Response::builder()
+                .header(CONTENT_TYPE, content_type)
+                .body(std::fs::read(&path).unwrap().into())
+                .map_err(Into::into)
+        })
         .with_custom_protocol("thumbnail".into(), |req| {
             // https://specifications.freedesktop.org/thumbnail-spec/thumbnail-spec-latest.html
 
@@ -125,12 +172,6 @@ fn main() -> wry::Result<()> {
         *control_flow = ControlFlow::Wait;
 
         match event {
-            Event::NewEvents(StartCause::Init) => {
-                let folder = event_loop_folder.lock().unwrap();
-                let stringified = serde_json::to_string(&*folder).unwrap();
-                webview.evaluate_script(&format!("setFolder({})", &stringified)).unwrap();
-            },
-
             Event::UserEvent(UserEvent::UpdateSuggestions { description }) => {
                 let stringified = serde_json::to_string(&description).unwrap();
                 webview.evaluate_script(&format!("setSuggestions({})", &stringified)).unwrap();
@@ -140,6 +181,7 @@ fn main() -> wry::Result<()> {
                 let stringified = serde_json::to_string(&folder).unwrap();
                 webview.evaluate_script(&format!("setFolder({})", &stringified)).unwrap();
             },
+
             Event::UserEvent(UserEvent::Ai(response)) => match response {
                 AiResponse::Success(success) => {
                     let message = "Sure, I can do that. Please review this script before evaluating it:";
@@ -238,40 +280,166 @@ fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -
     }).abort_handle()
 }
 
-fn get_folder(path: PathBuf) -> Folder {
+fn get_folder(path: &Path, options: &Options) -> Folder {
     let files = if path.is_dir() {
-        fs::read_dir(&path)
+        let (mut folders, mut files) = fs::read_dir(&path)
             .unwrap()
             .into_iter()
-            .filter_map(|entry|
-                entry
-                    .map(|entry| {
-                        let name = entry.file_name().to_string_lossy().into_owned();
-                        let ext = name.split('.').rev().next();
-                        let thumbnail = if ext == Some("png") {
-                            Some(generate_thumbnail_hash(entry.path().to_str().unwrap()))
-                        } else {
-                            None
-                        };
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
 
-                        File {
-                            name,
-                            thumbnail
+                if name.starts_with(".") && !options.sort_show_hidden {
+                    return None;
+                }
+
+                Some(entry)
+            })
+            .fold((vec![], vec![]), |(mut folders, mut files), entry| {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    folders.push(entry);
+                } else {
+                    files.push(entry);
+                }
+
+                (folders, files)
+            });
+
+        let files = if options.sort_folders_first {
+            folders.sort_by(|a, b| {
+                let a_name = a.file_name().to_string_lossy().into_owned();
+                let b_name = b.file_name().to_string_lossy().into_owned();
+
+                match options.sort {
+                    Sort::AToZ => a_name.cmp(&b_name),
+                    Sort::ZToA => b_name.cmp(&a_name),
+                    Sort::Date => Ordering::Equal
+                }
+            });
+            files.sort_by(|a, b| {
+                let a_name = a.file_name().to_string_lossy().into_owned();
+                let b_name = b.file_name().to_string_lossy().into_owned();
+
+                match options.sort {
+                    Sort::AToZ => a_name.cmp(&b_name),
+                    Sort::ZToA => b_name.cmp(&a_name),
+                    Sort::Date => Ordering::Equal
+                }
+            });
+            folders.into_iter().chain(files.into_iter()).collect::<Vec<_>>()
+        } else {
+            let mut joined = folders.into_iter().chain(files.into_iter()).collect::<Vec<_>>();
+            joined.sort_by(|a, b| {
+                let a_name = a.file_name().to_string_lossy().into_owned();
+                let b_name = b.file_name().to_string_lossy().into_owned();
+
+                match options.sort {
+                    Sort::AToZ => a_name.cmp(&b_name),
+                    Sort::ZToA => b_name.cmp(&a_name),
+                    Sort::Date => {
+                        let a_modified = a.metadata().ok().map(|m| m.modified().ok()).flatten();
+                        let b_modified = b.metadata().ok().map(|m| m.modified().ok()).flatten();
+
+                        match (a_modified, b_modified) {
+                            (Some(a), Some(b)) => a.cmp(&b),
+                            _ => Ordering::Equal
                         }
-                    })
-                    .ok()
-            )
+                    },
+                }
+            });
+            joined
+        };
+
+        files.into_iter()
+            .map(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+
+                let ext = name.split('.').rev().next();
+                let graphic = if ext == Some("png") {
+                    let hash = generate_thumbnail_hash(entry.path().to_str().unwrap());
+                    Some(Url::parse(&format!("thumbnail://{hash}")).unwrap())
+                } else {
+                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        Some(get_folder_icon_url(&entry.path()))
+                    } else {
+                        Some(get_file_icon_url(&entry.path()))
+                    }
+                };
+
+                File {
+                    name,
+                    graphic
+                }
+            })
             .collect::<Vec<File>>()
     } else {
         vec![]
     };
 
     Folder {
-        path,
+        path: path.to_path_buf(),
         files
     }
 }
 
+// This is here because the hamburger menu in CSS is "display: none" when the applications opened.
+// It's icons don't get loaded until it's first shown, which causes a noticeable (200 ms on my
+// machine) delay in opening the menu because the icon resolution mechanism for Gnome is pure
+// madness, and my implementation of it is slow. Instead of making that faster we're just spawning a
+// thread and looking up these guys so they are internally cached in the Icons struct, and fast when
+// the menu's opened up.
+fn cache_hamburger_icons(theme: &str, icons: &Arc<Mutex<Icons>>) {
+    let thread_icons = icons.clone();
+    let theme = theme.to_string();
+
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(3));
+        let mut ic = thread_icons.lock().unwrap();
+
+        let _ = ic.find(&theme, "view-sort-descending-symbolic", 32, 1).unwrap();
+        let _ = ic.find(&theme, "view-sort-ascending-symbolic", 32, 1).unwrap();
+        let _ = ic.find(&theme, "stopwatch-symbolic", 32, 1).unwrap();
+    });
+}
+
+fn get_folder_icon_url(path: &Path) -> Url {
+    let paths = path.to_str().unwrap_or("").split("/");
+    let paths = paths.take(5).collect::<Vec<_>>();
+
+    match (paths.len(), paths.as_slice()) {
+        (4, [_, "home", _, "Music"]) => Url::parse("icon://folder-music").unwrap(),
+        (4, [_, "home", _, "Pictures"]) => Url::parse("icon://folder-pictures").unwrap(),
+        (4, [_, "home", _, "Documents"]) => Url::parse("icon://folder-documents").unwrap(),
+        (4, [_, "home", _, "Downloads"]) => Url::parse("icon://folder-download").unwrap(),
+        (4, [_, "home", _, "Desktop"]) => Url::parse("icon://user-desktop").unwrap(),
+        (4, [_, "home", _, "Dropbox"]) => Url::parse("icon://folder-dropbox").unwrap(),
+        (4, [_, "home", _, "Public"]) => Url::parse("icon://folder-publicshare").unwrap(),
+        (4, [_, "home", _, "Templates"]) => Url::parse("icon://folder-templates").unwrap(),
+        (4, [_, "home", _, "Videos"]) => Url::parse("icon://folder-videos").unwrap(),
+        _ => Url::parse("icon://folder").unwrap()
+    }
+}
+
+fn get_file_icon_url(path: &Path) -> Url {
+    // TODO
+    Url::parse("icon://text-x-plain").unwrap()
+}
+
 fn generate_thumbnail_hash(s: &str) -> String {
     format!("{:x}", md5::compute(&Url::parse(&format!("file://{s}")).unwrap().to_string()))
+}
+
+fn get_icon_theme(rt: &Runtime) -> String {
+    rt.block_on(async {
+        let mut cmd = Command::new("gsettings")
+            .args(&["get", "org.gnome.desktop.interface", "icon-theme"])
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        let mut stdout = cmd.stdout.take().unwrap();
+        let mut result = String::new();
+        stdout.read_to_string(&mut result).await.unwrap();
+        result.replace("'", "").trim().to_string()
+    })
 }
