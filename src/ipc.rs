@@ -20,6 +20,7 @@ use crate::{Folder,Suggestions,Options};
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
+    Initialized,
     Back {
         options: Options
     },

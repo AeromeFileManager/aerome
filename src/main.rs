@@ -57,6 +57,9 @@ fn main() -> wry::Result<()> {
     let handler = move |window: &Window, req: String| {
 
         match serde_json::from_str(req.as_str()).unwrap() {
+            Cmd::Initialized => {
+                window.set_visible(true);
+            },
             Cmd::Back { options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
 
@@ -97,9 +100,6 @@ fn main() -> wry::Result<()> {
                 communicate(&rt, &message, proxy.clone());
             },
             Cmd::Options { options } => {
-                //window.set_visible(true);
-
-
                 let mut unlocked = handler_folder.lock().unwrap();
                 *unlocked = get_folder(&unlocked.path, &options);
 
@@ -114,17 +114,18 @@ fn main() -> wry::Result<()> {
     let window = WindowBuilder::new()
         .with_title("Future")
         .with_decorations(false)
+        .with_transparent(true)
         .build(&event_loop)?;
 
-    //window.set_visible(false);
+    window.set_visible(false);
 
-    let icons = Arc::new(Mutex::new(Icons::default()));
-    cache_hamburger_icons(&theme, &icons);
+    let icons = Mutex::new(Icons::default());
 
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
         .with_background_color((0, 0, 0, 1))
         .with_ipc_handler(handler)
+        .with_transparent(true)
         .with_custom_protocol("icon".into(), move |req| {
             let mut ic = icons.lock().unwrap();
             let icon = req.uri().host().unwrap();
@@ -380,26 +381,6 @@ fn get_folder(path: &Path, options: &Options) -> Folder {
         path: path.to_path_buf(),
         files
     }
-}
-
-// This is here because the hamburger menu in CSS is "display: none" when the applications opened.
-// It's icons don't get loaded until it's first shown, which causes a noticeable (200 ms on my
-// machine) delay in opening the menu because the icon resolution mechanism for Gnome is pure
-// madness, and my implementation of it is slow. Instead of making that faster we're just spawning a
-// thread and looking up these guys so they are internally cached in the Icons struct, and fast when
-// the menu's opened up.
-fn cache_hamburger_icons(theme: &str, icons: &Arc<Mutex<Icons>>) {
-    let thread_icons = icons.clone();
-    let theme = theme.to_string();
-
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(3));
-        let mut ic = thread_icons.lock().unwrap();
-
-        let _ = ic.find(&theme, "view-sort-descending-symbolic", 32, 1).unwrap();
-        let _ = ic.find(&theme, "view-sort-ascending-symbolic", 32, 1).unwrap();
-        let _ = ic.find(&theme, "stopwatch-symbolic", 32, 1).unwrap();
-    });
 }
 
 fn get_folder_icon_url(path: &Path) -> Url {

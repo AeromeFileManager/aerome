@@ -15,13 +15,6 @@
 -->
 <!doctype html>
 
-<!--These icons are preloaded because otherwise the hamburger menu hangs a bit on 1st open-->
-<!--
-<link rel="preload" href="icon://view-sort-descending-symbolic?size=32" as="image">
-<link rel="preload" href="icon://view-sort-ascending-symbolic?size=32" as="image">
-<link rel="preload" href="icon://stopwatch-symbolic?size=32" as="image">
--->
-
 <style>
     @keyframes open {
         0% { opacity: 0 }
@@ -44,12 +37,33 @@
     }
 
     html, body {
-        background: #1a1919;
-        color: antiquewhite;
+        background: transparent;
+    }
+
+    html {
+        margin: 0;
     }
 
     body {
-        padding-bottom: 40px;
+        --window-drop-shadow-margin: 10px;
+
+        height: 100%;
+        overflow: hidden;
+        margin: var(--window-drop-shadow-margin);
+    }
+
+    body > main {
+        background: #1a1919;
+        color: antiquewhite;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        border-radius: 10px;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        box-shadow: 2px 2px 10px black;
+        display: flex;
+        flex-direction: column;
     }
 
     header {
@@ -151,11 +165,18 @@
     h1 { font-size: 18px; }
     h2 { font-size: 14px; }
 
-    #files li {
-        padding-bottom: 4px;
+    ul { padding: 0; margin: 10px; list-style-type: none; }
+
+    .files-wrapper {
+        flex: 1;
+        overflow-y: auto;
+        min-height: calc(100vh - 56px - 38px);
+        max-height: calc(100vh - 56px - 38px);
     }
 
-    ul { padding: 0; margin: 10px; list-style-type: none; }
+    .spacer {
+        min-height: 20px;
+    }
 
     ul#files {
         --grid-size: calc(120px + 100px * var(--grid-scale, 0.35));
@@ -163,12 +184,14 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(var(--grid-size), 1fr));
         grid-gap: 30px;
+        margin-bottom: 30px;
     }
 
     ul#files > li {
         display: flex;
         flex-direction: column;
         max-height: calc(var(--grid-size) - 20px);
+        padding-bottom: 4px;
     }
 
     ul#files > li > .image {
@@ -183,9 +206,9 @@
 
     #action-wrapper {
         position: fixed;
-        bottom: 0px;
-        left: 0px;
-        right: 0px;
+        bottom: calc(4px + var(--window-drop-shadow-margin));
+        left: var(--window-drop-shadow-margin);
+        right: var(--window-drop-shadow-margin);
         height: 42px;
         opacity: 0.7;
         padding-left: 12px;
@@ -195,51 +218,32 @@
         background: transparent;
     }
 
-    #action-sibling {
-        position: fixed;
-        bottom: 0px;
-        left: 0px;
-        right: 0px;
-        height: 42px;
-        background: transparent;
-        transition: height 0.25s ease-in-out;
-        color: black;
-        /*
-        pointer-events: none;
-        */
-    }
-
     #action-wrapper.open {
-        height: 200px;
+        height: 220px;
         background: rgba(240,240,240, 0.9);
+        bottom: 8px;
     }
 
     #action-wrapper.open ~ #action-sibling {
-        height: 200px;
+        height: 220px;
     }
-
-    #action-wrapper.open ~ #action-sibling {
-    }
-
-    /*
-    #action-sibling {
-        z-index: 1;
-    }
-    */
 
     #action-wrapper input#dummy-action {
-        height: 32px;
+        height: 35px;
         position: absolute;
-        bottom: 5px;
-        left: 5px;
-        right: 5px;
-        text-align: center;
+        bottom: 0;
+        left: 0;
+        right: 0;
+    }
+
+    #action-wrapper.open input#dummy-action  {
+        bottom: 6px;
     }
 
     #action-wrapper ~ input#action {
         height: 34px;
         position: fixed;
-        bottom: 5px;
+        bottom: calc(5px + var(--window-drop-shadow-margin));
         left: 120px;
         right: 120px;
         text-align: center;
@@ -248,6 +252,17 @@
         border: none;
         outline: none;
         -webkit-appearance: none;
+    }
+
+    #action-sibling {
+        position: fixed;
+        bottom: var(--window-drop-shadow-margin);
+        left: var(--window-drop-shadow-margin);
+        right: var(--window-drop-shadow-margin);
+        height: 42px;
+        background: transparent;
+        transition: height 0.25s ease-in-out;
+        color: black;
     }
 
 
@@ -260,7 +275,7 @@
 
     #action-wrapper ~ #action-sibling .overflow-wrapper {
         display: block;
-        width: 100vw;
+        width: calc(100vw - var(--window-drop-shadow-margin) * 2);
         height: 150px;
         overflow-y: auto;
         z-index: 1000;
@@ -268,16 +283,13 @@
 
     #action-wrapper.open.actions ~ #action-sibling ul#actions,
     #action-wrapper.open.conversation ~ #action-sibling ul#conversation {
-        /*
-        margin-top: -32px;
-        */
         color: rgba(0,0,0,1);
     }
 
     #action-wrapper ~ #action-suggestions {
         position: fixed;
-        bottom: 8px;
-        left: 8px;
+        bottom: calc(8px + var(--window-drop-shadow-margin));
+        left: calc(6px + var(--window-drop-shadow-margin));
         height: 32px;
         -webkit-appearance: none;
         background: rgb(247, 247, 247);
@@ -290,8 +302,8 @@
 
     #action-wrapper ~ #action-submit {
         position: fixed;
-        bottom: 8px;
-        right: 8px;
+        bottom: calc(8px + var(--window-drop-shadow-margin));
+        right: calc(6px + var(--window-drop-shadow-margin));
         height: 32px;
         -webkit-appearance: none;
         background: rgb(247, 247, 247);
@@ -357,70 +369,75 @@
 
 </style>
 <body>
-    <header>
-        <button id="back">Back</button>
-        <h1 id="folder" class="titlebar"></h1>
-        <div>
-            <div class="menu"
-                onclick="event.target.matches('.tap-area, .menu') && this.firstElementChild.classList.toggle('showing')">
-                <div class="content">
-                    <form>
-                        <h2>Scale</h2>
-                        <input class="grid-scale" type="range" min=0 max=1 value=0.4 step=0.01
-                            oninput="future.settings.gridScale = this.value" />
+    <main>
+        <header>
+            <button id="back">Back</button>
+            <h1 id="folder" class="titlebar"></h1>
+            <div>
+                <div class="menu"
+                    onclick="event.target.matches('.tap-area, .menu') && this.firstElementChild.classList.toggle('showing')">
+                    <div class="content">
+                        <form>
+                            <h2>Scale</h2>
+                            <input class="grid-scale" type="range" min=0 max=1 value=0.4 step=0.01
+                                oninput="future.settings.gridScale = this.value" />
 
-                        <h2>Sort</h2>
+                            <h2>Sort</h2>
 
-                        <fieldset id="sort"
-                            onchange="future.settings.sort = this.querySelector(':checked').value">
-                            <input type="radio" name="sort" value="a-z" />
-                            <input type="radio" name="sort" value="z-a" />
-                            <input type="radio" name="sort" value="date" />
-                        </fieldset>
+                            <fieldset id="sort"
+                                onchange="future.settings.sort = this.querySelector(':checked').value">
+                                <input type="radio" name="sort" value="a-z" />
+                                <input type="radio" name="sort" value="z-a" />
+                                <input type="radio" name="sort" value="date" />
+                            </fieldset>
 
-                        <label>
-                            <input id="sort_folders_first" type="checkbox" name="folders_first"
-                                onchange="future.settings.sortFoldersFirst = this.checked" />
-                            Folders first
-                        </label>
+                            <label>
+                                <input id="sort_folders_first" type="checkbox" name="folders_first"
+                                    onchange="future.settings.sortFoldersFirst = this.checked" />
+                                Folders first
+                            </label>
 
-                        <label>
-                            <input id="sort_show_hidden" type="checkbox" name="show_hidden"
-                                onchange="future.settings.sortShowHidden = this.checked" />
-                            Show hidden
-                        </label>
-                    </form>
+                            <label>
+                                <input id="sort_show_hidden" type="checkbox" name="show_hidden"
+                                    onchange="future.settings.sortShowHidden = this.checked" />
+                                Show hidden
+                            </label>
+                        </form>
+                    </div>
+
+                    <div class="tap-area" aria-hidden=true></div>
                 </div>
+            </div>
+        </header>
 
-                <div class="tap-area" aria-hidden=true></div>
+        <div class="files-wrapper">
+            <ul id="files">
+
+            </ul>
+        </div>
+
+        <div class="spacer" aria-hidden=true></div>
+
+        <div id="action-wrapper">
+            <input type="text" id="dummy-action" />
+        </div>
+
+        <input type="text" id="action" />
+
+        <button id="action-suggestions">Suggestions</button>
+        <button id="action-submit">Conversation</button>
+
+        <div id="action-sibling">
+            <div class="overflow-wrapper">
+                <ul id="actions">
+
+                </ul>
+
+                <ul id="conversation">
+                </ul>
             </div>
         </div>
-    </header>
-
-    <ul id="files">
-
-    </ul>
-
-    <div id="action-wrapper">
-        <input type="text" id="dummy-action" />
-    </div>
-
-    <input type="text" id="action" />
-
-    <button id="action-suggestions">Suggestions</button>
-    <button id="action-submit">Conversation</button>
-
-    <div id="action-sibling">
-        <div class="overflow-wrapper">
-            <ul id="actions">
-
-            </ul>
-
-            <ul id="conversation">
-                
-            </ul>
-        </div>
-    </div>
+    </main>
 
     <script>
         window.future = {
@@ -510,6 +527,7 @@
             addConversationItem('user', message);
         });
 
+        let initialized = false;
         window.setFolder = ({ path, files }) => {
             document.getElementById('files').innerHTML = '';
             document.getElementById('folder').textContent = path;
@@ -533,6 +551,11 @@
                 li.append(span);
 
                 document.getElementById('files').append(li);
+            }
+
+            if (!initialized) {
+                initialized = true;
+                rpc.invoke({ cmd: 'initialized' });
             }
         };
 
