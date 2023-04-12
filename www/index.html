@@ -202,6 +202,7 @@
         justify-content: center;
         align-items: center;
         user-select: none;
+        overflow: hidden;
     }
 
     header h1 {
@@ -302,38 +303,31 @@
 
     #action-wrapper.open {
         height: 220px;
-        background: rgba(240,240,240, 0.9);
+        background: var(--primary-bg);
         bottom: 8px;
+        border-top: 1px solid white;
     }
 
     #action-wrapper.open ~ #action-sibling {
         height: 220px;
     }
 
-    #action-wrapper input#dummy-action {
-        height: 35px;
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-    }
-
-    #action-wrapper.open input#dummy-action  {
-        bottom: 6px;
-    }
-
     #action-wrapper ~ input#action {
         height: 34px;
         position: fixed;
         bottom: calc(5px + var(--window-drop-shadow-margin));
-        left: 120px;
-        right: 120px;
+        left: calc(2px + var(--window-drop-shadow-margin));
+        right: calc(2px + var(--window-drop-shadow-margin));
+        padding-left: 120px;
+        padding-right: 120px;
         text-align: center;
         z-index: 1000;
-        background: transparent;
-        border: none;
+        background: rgba(250,250,250,0.8);
+        border: 0.1px solid rebeccapurple;
+        border-radius: 4px;
         outline: none;
         -webkit-appearance: none;
+        -webkit-backdrop-filter: blur(8px);
     }
 
     #action-sibling {
@@ -358,9 +352,10 @@
     #action-wrapper ~ #action-sibling .overflow-wrapper {
         display: block;
         width: calc(100vw - var(--window-drop-shadow-margin) * 2);
-        height: 150px;
+        height: 220px;
         overflow-y: auto;
         z-index: 1000;
+        margin-top: 2px;
     }
 
     #action-wrapper.open.actions ~ #action-sibling ul#actions,
@@ -374,7 +369,7 @@
         left: calc(6px + var(--window-drop-shadow-margin));
         height: 32px;
         -webkit-appearance: none;
-        background: rgb(247, 247, 247);
+        background: white;
         border-bottom-left-radius: 4px;
         border-top-left-radius: 4px;
         border: 1px solid rgb(193, 193, 193);
@@ -388,7 +383,7 @@
         right: calc(6px + var(--window-drop-shadow-margin));
         height: 32px;
         -webkit-appearance: none;
-        background: rgb(247, 247, 247);
+        background: white;
         border-bottom-right-radius: 4px;
         border-top-right-radius: 4px;
         border: 1px solid rgb(193, 193, 193);
@@ -399,6 +394,7 @@
     #conversation {
         display: flex;
         flex-direction: column;
+        padding-bottom: 30px;
     }
 
     #conversation li {
@@ -407,8 +403,10 @@
         background: white;
         border-radius: 10px;
         margin: 0;
+        margin-bottom: 10px;
         line-height: 30px;
         padding: 0 10px;
+        overflow-x: hidden;
     }
 
     #conversation li.ai {
@@ -508,7 +506,6 @@
         <div class="spacer" aria-hidden=true></div>
 
         <div id="action-wrapper">
-            <input type="text" id="dummy-action" />
         </div>
 
         <input type="text" id="action" />
@@ -727,6 +724,7 @@
                 conversation.classList.add('locked');
             }
 
+            li.scrollIntoView({ behavior: 'smooth' });
             return li;
         };
 
