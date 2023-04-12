@@ -24,9 +24,37 @@ use std::collections::HashMap;
 // https://specifications.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html
 // https://specifications.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html
 
+type ThemeName = String;
+type ThemePath = String;
+
 #[derive(Default)]
 pub struct Icons {
-    cache: HashMap<Lookup, PathBuf>
+    cache: HashMap<Lookup, PathBuf>,
+    themes: HashMap<ThemeName, Theme>
+}
+
+#[derive(Clone, Debug, Default)]
+struct Theme {
+    name: String,
+    directories: Vec<String>,
+    // TODO: Respect this
+    inherits: Vec<String>,
+    context: HashMap<ThemePath, ThemeContext>
+}
+
+#[derive(Clone, Debug, Default)]
+struct ThemeContext {
+    context: String,
+    size: i32,
+    r#type: ThemeType
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+enum ThemeType {
+    #[default]
+    Fixed,
+    Scalable,
+    Threshold
 }
 
 impl Icons {
@@ -43,7 +71,27 @@ impl Icons {
             return Ok(path.to_owned());
         }
 
-        if let Some(icon) = find_icon(icon, size, scale, theme) {
+        let theme = if let Some(theme) = self.themes.get(theme) {
+            theme.clone()
+        } else {
+            let theme = Theme::load(theme)
+                .ok_or(IconLookupFailure::ThemeMissing(theme.to_owned()))?;
+
+            self.themes.insert(theme.name.clone(), theme.clone());
+            theme
+        };
+
+        let fallback = if let Some(theme) = self.themes.get("hicolor") {
+            theme.clone()
+        } else {
+            let theme = Theme::load("hicolor")
+                .ok_or(IconLookupFailure::ThemeMissing("hicolor".to_owned()))?;
+
+            self.themes.insert("hicolor".to_owned(), theme.clone());
+            theme
+        };
+
+        if let Some(icon) = find_icon(icon, size, scale, &theme, &fallback) {
             self.cache.insert(lookup, icon.clone());
             Ok(icon)
         } else {
@@ -66,13 +114,13 @@ impl Lookup {
     }
 }
 
-fn find_icon(icon: &str, size: i32, scale: i32, theme: &str) -> Option<PathBuf> {
+fn find_icon(icon: &str, size: i32, scale: i32, theme: &Theme, fallback: &Theme) -> Option<PathBuf> {
     let filename = find_icon_helper(icon, size, scale, theme)?;
     if filename.exists() {
         return Some(filename);
     }
 
-    let fallback_filename = find_icon_helper(icon, size, scale, "hicolor")?;
+    let fallback_filename = find_icon_helper(icon, size, scale, fallback)?;
     if fallback_filename.exists() {
         return Some(fallback_filename);
     }
@@ -80,8 +128,8 @@ fn find_icon(icon: &str, size: i32, scale: i32, theme: &str) -> Option<PathBuf> 
     lookup_fallback_icon(icon)
 }
 
-fn find_icon_helper(icon: &str, size: i32, scale: i32, theme: &str) -> Option<PathBuf> {
-    let subdir_list = get_subdir_list(theme)?;
+fn find_icon_helper(icon: &str, size: i32, scale: i32, theme: &Theme) -> Option<PathBuf> {
+    let subdir_list = &theme.directories;
     let basename_list = get_basename_list();
     let mut closest_filename = None;
     let mut minimal_size = i32::MAX;
@@ -91,7 +139,7 @@ fn find_icon_helper(icon: &str, size: i32, scale: i32, theme: &str) -> Option<Pa
             for extension in &["png", "svg", "xpm"] {
                 let subdir_matches_size = directory_matches_size(&subdir, size, scale, theme);
                 let filename = Path::new(directory)
-                    .join(theme)
+                    .join(&theme.name)
                     .join(&subdir)
                     .join(icon)
                     .with_extension(extension);
@@ -100,7 +148,7 @@ fn find_icon_helper(icon: &str, size: i32, scale: i32, theme: &str) -> Option<Pa
                     return Some(filename);
                 }
 
-                if let Some(distance) = directory_size_distance(&subdir, size, scale) {
+                if let Some(distance) = directory_size_distance(&subdir, size, scale, theme) {
                     if distance < minimal_size {
                         closest_filename = Some(filename);
                         minimal_size = distance;
@@ -114,52 +162,63 @@ fn find_icon_helper(icon: &str, size: i32, scale: i32, theme: &str) -> Option<Pa
         return Some(filename);
     }
 
-    if let Some(parent) = get_parent_theme(theme) {
+    /*
+    if let Some(parent) = get_parent_theme(&theme.name) {
         return find_icon_helper(icon, size, scale, &parent);
     }
+    */
 
     None
 }
 
-fn directory_matches_size(subdir: &str, size: i32, scale: i32, theme: &str) -> bool {
-    let (dir_type, dir_size) = get_directory_size_data(subdir, theme)
-        .unwrap_or((String::new(), 0));
-
-    if dir_type == "Fixed" {
-        return size == dir_size && scale == 1;
-    } else if dir_type == "Scalable" {
-        let min_size = dir_size / 2;
-        let max_size = dir_size * 2;
-        return min_size <= size * scale && size * scale <= max_size;
-    } else if dir_type == "Threshold" {
-        let threshold = dir_size / 4;
-        return dir_size - threshold <= size * scale && size * scale <= dir_size + threshold;
+fn directory_matches_size(subdir: &str, size: i32, scale: i32, theme: &Theme) -> bool {
+    if let Some(context) = theme.context.get(subdir) {
+        match context.r#type {
+            ThemeType::Fixed => size == context.size && scale == 1,
+            ThemeType::Scalable => {
+                let min_size = context.size / 2;
+                let max_size = context.size * 2;
+                min_size <= size * scale && size * scale <= max_size
+            },
+            ThemeType::Threshold => {
+                let threshold = context.size / 4;
+                context.size - threshold <= size * scale && size * scale <= context.size + threshold
+            },
+            _ => false
+        }
+    } else {
+        false
     }
-
-    false
 }
 
-fn directory_size_distance(subdir: &str, size: i32, scale: i32) -> Option<i32> {
-    let (dir_type, dir_size) = get_directory_size_data(subdir, "")?;
-    if dir_type == "Fixed" {
-        return Some(i32::abs(dir_size * scale - size));
-    } else if dir_type == "Scaled" {
-        let min_size = dir_size / 2;
-        let max_size = dir_size * 2;
-        if size * scale < min_size {
-            return Some(min_size * scale - size * scale);
-        } else if size * scale > max_size {
-            return Some(size * scale - max_size * scale);
-        }
-    } else if dir_type == "Threshold" {
-        let threshold = dir_size / 4;
-        if size * scale < (dir_size - threshold) {
-            return Some((dir_size - threshold) * scale - size * scale);
-        } else if size * scale > (dir_size + threshold) {
-            return Some(size * scale - (dir_size + threshold) * scale);
-        }
+fn directory_size_distance(subdir: &str, size: i32, scale: i32, theme: &Theme) -> Option<i32> {
+    let context = theme.context.get(subdir)?;
+
+    match context.r#type {
+        ThemeType::Fixed => Some(i32::abs(context.size * scale - size)),
+        ThemeType::Scalable => {
+            let min_size = context.size / 2;
+            let max_size = context.size * 2;
+            if size * scale < min_size {
+                Some(min_size * scale - size * scale)
+            } else if size * scale > max_size {
+                Some(size * scale - max_size * scale)
+            } else {
+                None
+            }
+        },
+        ThemeType::Threshold => {
+            let threshold = context.size / 4;
+            if size * scale < (context.size - threshold) {
+                Some((context.size - threshold) * scale - size * scale)
+            } else if size * scale > (context.size + threshold) {
+                Some(size * scale - (context.size + threshold) * scale)
+            } else {
+                None
+            }
+        },
+        _ => None
     }
-    Some(0)
 }
 
 fn lookup_fallback_icon(icon: &str) -> Option<PathBuf> {
@@ -173,33 +232,6 @@ fn lookup_fallback_icon(icon: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-fn get_theme_index(theme: &str) -> Option<String> {
-    for mut base in get_basename_list() {
-        base.push(theme);
-        base.push("index.theme");
-
-        if base.exists() {
-            return fs::read_to_string(base).ok()
-        }
-    }
-
-    None
-}
-
-fn get_subdir_list(theme: &str) -> Option<Vec<String>> {
-    get_theme_index(theme).and_then(|theme| theme
-        .lines()
-        .find(|line| line.starts_with("Directories="))
-        .map(|line| line
-            .replacen("Directories=", "", 1)
-            .split(",")
-            .filter(|s| s.len() > 0)
-            .map(|s| s.to_owned())
-            .collect()
-        )
-    )
 }
 
 fn get_basename_list() -> Vec<PathBuf> {
@@ -229,37 +261,6 @@ fn get_basename_list() -> Vec<PathBuf> {
         .collect()
 }
 
-fn get_directory_size_data(subdir: &str, theme: &str) -> Option<(String, i32)> {
-    let theme_index = get_theme_index(theme)?;
-    let test = format!("[{subdir}]");
-    let mut is_inside_directory_data = false;
-    let mut r#type = None;
-    let mut size = None;
-
-    for line in theme_index.lines() {
-        if !is_inside_directory_data {
-            // We haven't found our directory options index yet
-            is_inside_directory_data = line == test;
-            continue;
-        }
-
-        if line.starts_with("[") {
-            // We've hit the end of our options window
-            break;
-        }
-
-        if line.starts_with("Size=") {
-            size = Some(line.replacen("Size=", "", 1));
-        }
-
-        if line.starts_with("Type=") {
-            r#type = Some(line.replacen("Type=", "", 1));
-        }
-    }
-
-    Some((r#type?, size?.parse::<i32>().ok()?))
-}
-
 fn get_parent_theme(theme: &str) -> Option<String> {
     // FIXME: The spec mentions parent themes, but doesn't explain them at all
     None
@@ -267,6 +268,86 @@ fn get_parent_theme(theme: &str) -> Option<String> {
 
 #[derive(Debug)]
 pub enum IconLookupFailure {
-    ThemeIndexMissing,
+    ThemeMissing(ThemeName),
     IconResolutionFailed(Lookup)
+}
+
+impl Theme {
+    fn load(name: &str) -> Option<Self> {
+        let theme_ini = get_basename_list().into_iter().find_map(|mut base| {
+            base.push(name);
+            base.push("index.theme");
+
+            if base.exists() {
+                return Some(fs::read_to_string(base).ok()?)
+            }
+
+            None
+        })?;
+
+        let items: Vec<(String, Vec<String>)> = theme_ini.lines().fold(vec![], |mut items, line| {
+            if line.starts_with("[") {
+                items.push((line[1..line.len() - 1].to_string(), vec![]));
+            } else {
+                if let Some(mut item) = items.last_mut() {
+                    item.1.push(line.to_owned());
+                }
+            }
+            items
+        });
+
+        let mut theme = Theme::default();
+        theme.name = name.to_owned();
+
+        for (entry, lines) in items {
+            match &*entry {
+                "Icon Theme" => {
+                    for line in lines {
+                        if line.starts_with("Directories=") {
+                            theme.directories = line
+                                .replacen("Directories=", "", 1)
+                                .split(",")
+                                .filter(|s| s.len() > 0)
+                                .map(|s| s.to_owned())
+                                .collect();
+                        }
+
+                        if line.starts_with("Inherits=") {
+                            theme.inherits = line
+                                .replacen("Inherits==", "", 1)
+                                .split(",")
+                                .filter(|s| s.len() > 0)
+                                .map(|s| s.to_owned())
+                                .collect();
+                        }
+                    }
+                },
+                _ => {
+                    let mut context = ThemeContext::default();
+
+                    for line in lines {
+                        if line.starts_with("Size=") {
+                            context.size = line.replacen("Size=", "", 1).parse::<i32>().unwrap();
+                        }
+
+                        if line.starts_with("Type=") {
+                            match line.trim() {
+                                "Type=Fixed" => context.r#type = ThemeType::Fixed,
+                                "Type=Scalable" => context.r#type = ThemeType::Scalable,
+                                "Type=Threshold" => context.r#type = ThemeType::Threshold,
+                                _ => {}
+                            }
+                        }
+
+                        if line.starts_with("Context") {
+                            context.context = line.replacen("Context=", "", 1);
+                        }
+                    }
+
+                    theme.context.insert(entry, context);
+                }
+            }
+        }
+        Some(theme)
+    }
 }
