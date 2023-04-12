@@ -197,12 +197,21 @@
         cursor: pointer;
     }
 
+    header .folder-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        user-select: none;
+    }
+
     header h1 {
+        padding: 0 10px;
         margin: 0;
         font-size: 16px;
         text-align: center;
         transition: all 0.2s ease-in-out;
-        line-height: var(--header-height);
+        line-height: 32px;
+        height: 30px;
     }
 
     header.compressed h1 {
@@ -234,6 +243,20 @@
 
     .spacer {
         min-height: 20px;
+    }
+
+    ul#files.missing::after {
+        content: '         Missing Directory';
+        width: 200px;
+        height: 200px;
+        background: url(icon://image-missing-symbolic?size=32);
+        background-repeat: no-repeat;
+        background-size: 150px;
+        position: absolute;
+        background-position-y: 40px;
+        position: absolute;
+        left: calc(50% - 45px);
+        top: 120px;
     }
 
     ul#files {
@@ -467,7 +490,9 @@
                 <div class="tap-area" aria-hidden=true></div>
             </div>
 
-            <h1 id="folder" class="titlebar"></h1>
+            <div class="folder-wrapper">
+                <h1 id="folder" contenteditable></h1>
+            </div>
 
             <div class="controls">
                 <img src="icon://window-minimize-symbolic?size=32" alt="minimize application" />
@@ -477,9 +502,7 @@
         </header>
 
         <div class="files-wrapper">
-            <ul id="files">
-
-            </ul>
+            <ul id="files"></ul>
         </div>
 
         <div class="spacer" aria-hidden=true></div>
@@ -544,7 +567,6 @@
                     localStorage.gridScale = scale;
                     document.querySelector('header .grid-scale').value = scale;
                     document.getElementById('files').style.setProperty('--grid-scale', scale);
-                    console.log('f');
                 }
             }
         };
@@ -595,7 +617,13 @@
 
         let initialized = false;
         window.setFolder = ({ path, files }) => {
-            document.getElementById('files').innerHTML = '';
+            const filesEl = document.getElementById('files');
+
+            filesEl.classList.remove('missing');
+            filesEl.blur();
+            getSelection().removeAllRanges();
+
+            filesEl.innerHTML = '';
             document.getElementById('folder').textContent = path;
 
             for (const file of files) {
@@ -616,13 +644,20 @@
                 span.textContent = file.name;
                 li.append(span);
 
-                document.getElementById('files').append(li);
+                filesEl.append(li);
             }
 
             if (!initialized) {
                 initialized = true;
                 rpc.invoke({ cmd: 'initialized' });
             }
+        };
+
+        window.setMissingFolder = ({ path }) => {
+            console.log(path);
+
+            setFolder({ path, files: [] });
+            document.getElementById('files').classList.add('missing');
         };
 
         window.setSuggestions = ({ path, actions }) => {
@@ -722,17 +757,24 @@
         });
 
         document.addEventListener('mousedown', (e) => {
-            if (e.target.classList.contains('titlebar') && e.buttons === 1) {
+            if (e.target.classList.contains('folder-wrapper') && e.buttons === 1) {
                 rpc.invoke({ cmd: 'window', window: 'drag' });
+                e.preventDefault();
                 //e.detail === 2
                     //? window.ipc.postMessage()
             }
         });
 
         document.addEventListener('touchstart', (e) => {
-            if (e.target.classList.contains('.titlebar')) {
+            if (e.target.classList.contains('folder-wrapper')) {
                 window.ipc.postMessage('drag_window');
             }
+        });
+
+        document.getElementById('folder').addEventListener('keypress', e => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            rpc.invoke({ cmd: 'jump', to: e.target.textContent, options: future.settings });
         });
 
         const debounce = (delay, cb) => {

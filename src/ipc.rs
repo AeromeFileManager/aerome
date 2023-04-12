@@ -28,6 +28,10 @@ pub enum Cmd {
         to: String,
         options: Options
     },
+    Jump {
+        to: String,
+        options: Options
+    },
     Options {
         options: Options
     },
@@ -53,6 +57,9 @@ pub enum UserEvent {
     },
     UpdateSuggestions {
         description: Suggestions
+    },
+    NonexistentFolder {
+        path: String
     },
     Ai(AiResponse),
 }

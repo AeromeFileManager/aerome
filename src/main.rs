@@ -43,6 +43,7 @@ use wry::{
 use url::Url;
 use std::path::Path;
 use std::thread;
+use serde_json::json;
 
 fn main() -> wry::Result<()> {
     let folder = Arc::new(Mutex::new(get_folder(&current_dir().unwrap(), &Options::default())));
@@ -55,7 +56,6 @@ fn main() -> wry::Result<()> {
 
     let handler_folder = folder.clone();
     let handler = move |window: &Window, req: String| {
-
         match serde_json::from_str(req.as_str()).unwrap() {
             Cmd::Initialized => {
                 window.set_visible(true);
@@ -92,6 +92,22 @@ fn main() -> wry::Result<()> {
 
                 *ongoing = investigate(&rt, unlocked.clone(), proxy.clone());
                 */
+            },
+            Cmd::Jump { to, options } => {
+                let path = Path::new(&to);
+
+                if !path.exists() {
+                    proxy.send_event(UserEvent::NonexistentFolder {
+                        path: to
+                    });
+                } else {
+                    let mut unlocked = handler_folder.lock().unwrap();
+                    *unlocked = get_folder(&path, &options);
+
+                    proxy.send_event(UserEvent::UpdateFolder {
+                        folder: (*unlocked).clone()
+                    });
+                }
             },
             Cmd::Window(WindowCmd::Drag) => {
                 let _ = window.drag_window();
@@ -176,6 +192,11 @@ fn main() -> wry::Result<()> {
             Event::UserEvent(UserEvent::UpdateSuggestions { description }) => {
                 let stringified = serde_json::to_string(&description).unwrap();
                 webview.evaluate_script(&format!("setSuggestions({})", &stringified)).unwrap();
+            },
+
+            Event::UserEvent(UserEvent::NonexistentFolder { path }) => {
+                let stringified = serde_json::to_string(&json!({ "path": path })).unwrap();
+                webview.evaluate_script(&format!("setMissingFolder({})", &stringified)).unwrap();
             },
     
             Event::UserEvent(UserEvent::UpdateFolder { folder }) => {
