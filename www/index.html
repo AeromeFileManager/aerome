@@ -449,6 +449,10 @@
         width: 0px;
     }
 
+    #action-wrapper:not(.open.conversation) ~ #action-sibling #conversation {
+        display: none;
+    }
+
     @keyframes ellipsis {
         to {
             width: 1.25em;    
@@ -467,6 +471,20 @@
         background: transparent;
         height: 2px;
         background: black;
+    }
+
+    button#close-actions {
+        appearance: none;
+        width: 48px;
+        height: 48px;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: url(icon://go-down-symbolic?size=32);
+        background-repeat: no-repeat;
+        background-position: center;
+        border: 0;
+        cursor: pointer;
     }
 
 </style>
@@ -544,6 +562,7 @@
                 <ul id="conversation">
                 </ul>
             </div>
+            <button id="close-actions"></button>
         </div>
     </main>
 
@@ -797,6 +816,10 @@
             rpc.invoke({ cmd: 'jump', to: e.target.textContent, options: future.settings });
         });
 
+        document.getElementById('close-actions').addEventListener('click', e => {
+            closeActionsBox();
+        });
+
         document.addEventListener('keydown', e => {
             switch (event.key) {
                 case 'l': {
@@ -812,6 +835,13 @@
                     }
                     break;
                 }
+                case 'Escape': {
+                    const action = e.target.closest('input#action');
+                    if (action && action === document.activeElement) {
+                        closeActionsBox();
+                    }
+                    break;
+                }
                 default: {
                     if (!e.target.closest('input#action') && !e.target.closest('h1#folder')) {
                         const action = document.getElementById('action');
@@ -820,6 +850,19 @@
                 }
             }
         });
+
+        document.getElementById('action-submit').addEventListener('click', e => {
+            document.getElementById('action-wrapper').classList.remove('actions');
+            document.getElementById('action-wrapper').classList.add('open', 'conversations');
+        });
+
+        const closeActionsBox = () => {
+            document.getElementById('action-wrapper').classList.remove(
+                'open',
+                'actions',
+                'conversation'
+            );
+        };
 
         const debounce = (delay, cb) => {
             let id;
