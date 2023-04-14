@@ -94,7 +94,15 @@ fn main() -> wry::Result<()> {
                 */
             },
             Cmd::Jump { to, options } => {
-                let path = Path::new(&to);
+                let path = if to.starts_with("~/") {
+                    if let Some(home) = dirs::home_dir() {
+                        home.join(&to[2..])
+                    } else {
+                        PathBuf::from(&to)
+                    }
+                } else {
+                    PathBuf::from(&to)
+                };
 
                 if !path.exists() {
                     proxy.send_event(UserEvent::NonexistentFolder {
