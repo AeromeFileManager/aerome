@@ -670,8 +670,6 @@
         };
 
         window.setMissingFolder = ({ path }) => {
-            console.log(path);
-
             setFolder({ path, files: [] });
             document.getElementById('files').classList.add('missing');
         };
@@ -809,7 +807,12 @@
                     }
                     break;
                 }
-                default: console.log(event.key);
+                default: {
+                    if (!e.target.closest('input#action')) {
+                        const action = document.getElementById('action');
+                        action.focus();
+                    }
+                }
             }
         });
 
