@@ -615,13 +615,15 @@
         let initialized = false;
         window.setFolder = ({ path, files }) => {
             const filesEl = document.getElementById('files');
+            const folderEl = document.getElementById('folder');
 
             filesEl.classList.remove('missing');
-            filesEl.blur();
-            getSelection().removeAllRanges();
 
             filesEl.innerHTML = '';
-            document.getElementById('folder').textContent = path;
+            folderEl.textContent = path;
+
+            folderEl.blur();
+            filesEl.focus();
 
             for (const file of files) {
                 const li = document.createElement('li');
@@ -773,6 +775,25 @@
             if (e.key !== 'Enter') return;
             e.preventDefault();
             rpc.invoke({ cmd: 'jump', to: e.target.textContent, options: future.settings });
+        });
+
+        document.addEventListener('keydown', e => {
+            switch (event.key) {
+                case 'l': {
+                    if (event.ctrlKey) {
+                        document.getElementById('folder').focus();
+                        document.execCommand('selectAll', false, null);
+                    }
+                    break;
+                }
+                case 'ArrowLeft': {
+                    if (event.altKey) {
+                        rpc.invoke({ cmd: 'back', options: future.settings });
+                    }
+                    break;
+                }
+                default: console.log(event.key);
+            }
         });
 
         const debounce = (delay, cb) => {
