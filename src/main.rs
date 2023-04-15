@@ -130,7 +130,8 @@ fn main() -> wry::Result<()> {
                 proxy.send_event(UserEvent::CloseWindow);
             },
             Cmd::Communicate { message } => {
-                communicate(&rt, &message, proxy.clone());
+                let unlocked = handler_folder.lock().unwrap();
+                communicate(&rt, &message, proxy.clone(), &unlocked.clone());
             },
             Cmd::Options { options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
@@ -247,8 +248,15 @@ fn main() -> wry::Result<()> {
     Ok(())
 }
 
-fn communicate(rt: &Runtime, message: &str, proxy: EventLoopProxy<UserEvent>) {
-    let message = message.to_string();
+fn communicate(
+    rt: &Runtime,
+    message: &str,
+    proxy: EventLoopProxy<UserEvent>,
+    folder: &Folder)
+{
+    let dir = folder.path.to_string_lossy();
+    let files = folder.files.iter().map(|f| f.name.to_string()).collect::<Vec<_>>().join(", ");
+    let message = format!(r#"Given these files "{files}" in this directory "{dir}". {message}"#);
 
     rt.spawn(async move {
         let result = run_prompt("prompts/communicate.pr", message.as_bytes()).await;
