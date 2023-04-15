@@ -26,8 +26,9 @@ explore
 command
     history: false
     description: >
-        Write a bash script to accomplish this task. OUTPUT JUST THE SCRIPT,
-        and nothing else
+        Write a bash script to accomplish this task. Output the script surrounded by
+        "```" like a markdown code block. No extra commentary on the script is
+        required.
 {
     match $AI {
         (?s:```(?:bash|sh)?\s*(?:#!/bin/bash)?\s*(.*)\s*```) => `echo "SUCCESS:$1"`,
