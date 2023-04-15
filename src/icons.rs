@@ -37,8 +37,7 @@ pub struct Icons {
 struct Theme {
     name: String,
     directories: Vec<String>,
-    // TODO: Respect this
-    inherits: Vec<String>,
+    inherits: Vec<Theme>,
     context: HashMap<ThemePath, ThemeContext>
 }
 
@@ -115,14 +114,18 @@ impl Lookup {
 }
 
 fn find_icon(icon: &str, size: i32, scale: i32, theme: &Theme, fallback: &Theme) -> Option<PathBuf> {
-    let filename = find_icon_helper(icon, size, scale, theme)?;
-    if filename.exists() {
-        return Some(filename);
+    match find_icon_helper(icon, size, scale, theme) {
+        Some(filename) if filename.exists() => {
+            return Some(filename)
+        },
+        _ => {}
     }
 
-    let fallback_filename = find_icon_helper(icon, size, scale, fallback)?;
-    if fallback_filename.exists() {
-        return Some(fallback_filename);
+    match find_icon_helper(icon, size, scale, fallback) {
+        Some(fallback) if fallback.exists() => {
+            return Some(fallback);
+        },
+        _ => {}
     }
 
     lookup_fallback_icon(icon)
@@ -144,12 +147,14 @@ fn find_icon_helper(icon: &str, size: i32, scale: i32, theme: &Theme) -> Option<
                     .join(icon)
                     .with_extension(extension);
 
-                if filename.exists() && subdir_matches_size {
+                let filename_exists = filename.exists();
+
+                if filename_exists && subdir_matches_size {
                     return Some(filename);
                 }
 
                 if let Some(distance) = directory_size_distance(&subdir, size, scale, theme) {
-                    if distance < minimal_size {
+                    if distance < minimal_size && filename_exists {
                         closest_filename = Some(filename);
                         minimal_size = distance;
                     }
@@ -162,11 +167,11 @@ fn find_icon_helper(icon: &str, size: i32, scale: i32, theme: &Theme) -> Option<
         return Some(filename);
     }
 
-    /*
-    if let Some(parent) = get_parent_theme(&theme.name) {
-        return find_icon_helper(icon, size, scale, &parent);
+    for parent in theme.inherits.iter() {
+        if let Some(path) = find_icon_helper(icon, size, scale, parent) {
+            return Some(path);
+        }
     }
-    */
 
     None
 }
@@ -313,12 +318,17 @@ impl Theme {
                         }
 
                         if line.starts_with("Inherits=") {
-                            theme.inherits = line
-                                .replacen("Inherits==", "", 1)
+                            let inherits: Vec<String> = line
+                                .replacen("Inherits=", "", 1)
                                 .split(",")
                                 .filter(|s| s.len() > 0)
                                 .map(|s| s.to_owned())
                                 .collect();
+
+                            theme.inherits = inherits.into_iter()
+                                .map(|name| Theme::load(&name).expect(
+                                    &format!("Couldn't find theme '{}'", name)))
+                                .collect::<Vec<Theme>>();
                         }
                     }
                 },
