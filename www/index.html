@@ -499,7 +499,7 @@
                 <div class="content">
                     <form>
                         <h2>Scale</h2>
-                        <input class="grid-scale" type="range" min=0 max=1 value=0.4 step=0.01
+                        <input class="grid-scale" type="range" min=0 max=1 value=0.25 step=0.01
                             oninput="future.settings.gridScale = this.value" />
 
                         <h2>Sort</h2>
@@ -570,7 +570,7 @@
         window.future = {
             settings: {
                 get sort() {
-                    return localStorage.sort.toLowerCase();
+                    return localStorage.sort?.toLowerCase() ?? 'a-z';
                 },
                 set sort(sort) {
                     sort = sort.toLowerCase();
@@ -583,7 +583,11 @@
                     notifyOptionsUpdate();
                 },
                 get sortFoldersFirst() {
-                    return localStorage.sortFoldersFirst === 'true'
+                    switch (localStorage.sortFoldersFirst) {
+                        case undefined:
+                        case 'true': return true;
+                        default: return false;
+                    }
                 },
                 set sortFoldersFirst(sort) {
                     document.querySelector('header #sort_folders_first').checked = ('' + sort) === 'true';
@@ -591,7 +595,10 @@
                     notifyOptionsUpdate();
                 },
                 get sortShowHidden() {
-                    return localStorage.sortShowHidden === 'true'
+                    switch (localStorage.sortShowHidden) {
+                        case 'true': return true;
+                        default: return false;
+                    }
                 },
                 set sortShowHidden(sort) {
                     document.querySelector('header #sort_show_hidden').checked = ('' + sort) === 'true';
@@ -599,7 +606,8 @@
                     notifyOptionsUpdate();
                 },
                 get gridScale() {
-                    return +localStorage.gridScale;
+                    const scale = +localStorage.gridScale;
+                    return Number.isNaN(scale) ? 0.25 : scale;
                 },
                 set gridScale(scale) {
                     localStorage.gridScale = scale;
