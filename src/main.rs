@@ -120,6 +120,15 @@ fn main() -> wry::Result<()> {
             Cmd::Window(WindowCmd::Drag) => {
                 let _ = window.drag_window();
             },
+            Cmd::Window(WindowCmd::Maximize) => {
+                window.set_maximized(!window.is_maximized());
+            },
+            Cmd::Window(WindowCmd::Minimize) => {
+                window.set_minimized(true);
+            },
+            Cmd::Window(WindowCmd::Close) => {
+                proxy.send_event(UserEvent::CloseWindow);
+            },
             Cmd::Communicate { message } => {
                 communicate(&rt, &message, proxy.clone());
             },
@@ -226,10 +235,11 @@ fn main() -> wry::Result<()> {
                         .unwrap();
                 },
             },
-
-            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } =>
-                *control_flow = ControlFlow::Exit,
-
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } |
+            Event::UserEvent(UserEvent::CloseWindow) => {
+                //let _ = webview.take();
+                *control_flow = ControlFlow::Exit;
+            },
             _ => (),
         }
     });

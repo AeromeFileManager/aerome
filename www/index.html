@@ -533,9 +533,20 @@
             </div>
 
             <div class="controls">
-                <img src="icon://window-minimize-symbolic?size=32" alt="minimize application" />
-                <img src="icon://window-maximize-symbolic?size=32" alt="maximize application" />
-                <img src="icon://window-close-symbolic?size=32" alt="close application" />
+                <img
+                    id="control-minimize"
+                    src="icon://window-minimize-symbolic?size=32"
+                    alt="minimize application" />
+
+                <img
+                    id="control-maximize"
+                    src="icon://window-maximize-symbolic?size=32"
+                    alt="maximize application" />
+
+                <img
+                    id="control-close"
+                    src="icon://window-close-symbolic?size=32"
+                    alt="close application" />
             </div>
         </header>
 
@@ -862,6 +873,18 @@
         document.getElementById('action-submit').addEventListener('click', e => {
             document.getElementById('action-wrapper').classList.remove('actions');
             document.getElementById('action-wrapper').classList.add('open', 'conversations');
+        });
+
+        document.getElementById('control-minimize').addEventListener('click', e => {
+            rpc.invoke({ cmd: 'window', window: 'minimize' });
+        });
+
+        document.getElementById('control-maximize').addEventListener('click', e => {
+            rpc.invoke({ cmd: 'window', window: 'maximize' });
+        });
+
+        document.getElementById('control-close').addEventListener('click', e => {
+            rpc.invoke({ cmd: 'window', window: 'close' });
         });
 
         const closeActionsBox = () => {

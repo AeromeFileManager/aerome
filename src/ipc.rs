@@ -51,6 +51,7 @@ pub enum WindowCmd {
 }
 
 pub enum UserEvent {
+    CloseWindow,
     ExecEval(),
     UpdateFolder {
         folder: Folder
