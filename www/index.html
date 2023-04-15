@@ -422,6 +422,8 @@
     }
 
     #conversation li {
+        display: flex;
+        flex-direction: column;
         margin-bottom: 10px;
         max-width: 420px;
         background: white;
@@ -435,6 +437,17 @@
 
     #conversation li.ai {
         align-self: flex-end;
+    }
+
+    #conversation li.ai code pre {
+        overflow-y: scroll;
+    }
+
+    #conversation li.ai code ~ button.evaluate {
+        width: 100px;
+        align-self: flex-end;
+        padding: 10px;
+        margin-bottom: 10px;
     }
 
     #conversation.locked li.ai {
@@ -769,10 +782,20 @@
             if (codeblock) {
                 const pre = document.createElement('pre');
                 const code = document.createElement('code');
+                const evaluateButton = document.createElement('button');
+                const evaluateCode = () => {
+                    rpc.invoke({ cmd: 'evaluate', script: codeblock, options: future.settings });
+                };
 
                 code.append(pre);
                 pre.textContent = codeblock;
+
+                evaluateButton.className = 'evaluate';
+                evaluateButton.textContent = 'Evaluate';
+                evaluateButton.addEventListener('click', evaluateCode, { once: true });
+
                 li.append(code);
+                li.append(evaluateButton);
             }
 
             conversation.append(li);
@@ -789,6 +812,14 @@
 
             li.scrollIntoView({ behavior: 'smooth' });
             return li;
+        };
+
+        window.closeActionsBox = () => {
+            document.getElementById('action-wrapper').classList.remove(
+                'open',
+                'actions',
+                'conversation'
+            );
         };
 
         function detailsAnimationOpen(details, e) {
@@ -889,14 +920,6 @@
         document.getElementById('control-close').addEventListener('click', e => {
             rpc.invoke({ cmd: 'window', window: 'close' });
         });
-
-        const closeActionsBox = () => {
-            document.getElementById('action-wrapper').classList.remove(
-                'open',
-                'actions',
-                'conversation'
-            );
-        };
 
         const debounce = (delay, cb) => {
             let id;

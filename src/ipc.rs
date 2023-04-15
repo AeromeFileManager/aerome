@@ -38,6 +38,10 @@ pub enum Cmd {
     Communicate {
         message: String
     },
+    Evaluate {
+        script: String,
+        options: Options
+    },
     Window(WindowCmd),
 }
 
@@ -54,7 +58,8 @@ pub enum UserEvent {
     CloseWindow,
     ExecEval(),
     UpdateFolder {
-        folder: Folder
+        folder: Folder,
+        script_result: Option<Result<String, String>>
     },
     UpdateSuggestions {
         description: Suggestions

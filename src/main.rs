@@ -67,7 +67,8 @@ fn main() -> wry::Result<()> {
                     *unlocked = get_folder(&parent, &options);
 
                     proxy.send_event(UserEvent::UpdateFolder {
-                        folder: (*unlocked).clone()
+                        folder: (*unlocked).clone(),
+                        script_result: None
                     });
 
                     /*
@@ -83,7 +84,8 @@ fn main() -> wry::Result<()> {
                 *unlocked = get_folder(&unlocked.path.join(to), &options);
 
                 proxy.send_event(UserEvent::UpdateFolder {
-                    folder: (*unlocked).clone()
+                    folder: (*unlocked).clone(),
+                    script_result: None
                 });
 
                 /*
@@ -113,7 +115,8 @@ fn main() -> wry::Result<()> {
                     *unlocked = get_folder(&path, &options);
 
                     proxy.send_event(UserEvent::UpdateFolder {
-                        folder: (*unlocked).clone()
+                        folder: (*unlocked).clone(),
+                        script_result: None
                     });
                 }
             },
@@ -133,12 +136,24 @@ fn main() -> wry::Result<()> {
                 let unlocked = handler_folder.lock().unwrap();
                 communicate(&rt, &message, proxy.clone(), &unlocked.clone());
             },
+            Cmd::Evaluate { script, options } => {
+                let mut unlocked = handler_folder.lock().unwrap();
+                let result = run_script_sync(script, &unlocked.path);
+
+                *unlocked = get_folder(&unlocked.path, &options);
+
+                proxy.send_event(UserEvent::UpdateFolder {
+                    folder: (*unlocked).clone(),
+                    script_result: Some(result)
+                });
+            },
             Cmd::Options { options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
                 *unlocked = get_folder(&unlocked.path, &options);
 
                 proxy.send_event(UserEvent::UpdateFolder {
-                    folder: (*unlocked).clone()
+                    folder: (*unlocked).clone(),
+                    script_result: None
                 });
             },
             _ => {}
@@ -217,9 +232,31 @@ fn main() -> wry::Result<()> {
                 webview.evaluate_script(&format!("setMissingFolder({})", &stringified)).unwrap();
             },
     
-            Event::UserEvent(UserEvent::UpdateFolder { folder }) => {
+            Event::UserEvent(UserEvent::UpdateFolder { folder, script_result }) => {
                 let stringified = serde_json::to_string(&folder).unwrap();
                 webview.evaluate_script(&format!("setFolder({})", &stringified)).unwrap();
+
+                if let Some(result) = script_result {
+                    match result {
+                        Ok(message) if message.len() == 0 => {
+                            webview.evaluate_script("closeActionsBox()").unwrap();
+                        },
+                        Ok(message) => {
+                            let message = message.replace("`", "\\`");
+                            let message = format!("Command finished with result:\n\n{message}");
+
+                            webview.evaluate_script("addConversationItem('ai', `{message}`)")
+                                .unwrap();
+                        },
+                        Err(message) => {
+                            let message = message.replace("`", "\\`");
+                            let message = format!("Command finished with error:\n\n{message}");
+
+                            webview.evaluate_script("addConversationItem('ai', `{message}`)")
+                                .unwrap();
+                        }
+                    }
+                }
             },
 
             Event::UserEvent(UserEvent::Ai(response)) => match response {
@@ -268,6 +305,40 @@ fn communicate(
             _ => AiResponse::Failure(message.to_string()),
         }));
     });
+}
+
+fn run_script_sync(bash_script: String, current_dir: &Path) -> Result<String, String> {
+    Runtime::new()
+        .unwrap()
+        .block_on(async move {  run_script(bash_script, current_dir).await })
+}
+
+async fn run_script(bash_script: String, current_dir: &Path) -> Result<String, String> {
+    let mut cmd = Command::new("/bin/bash")
+        .args(&[ "-c", &bash_script ])
+        .current_dir(current_dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let mut stdout = cmd.stdout.take().unwrap();
+    let mut out = String::new();
+    stdout.read_to_string(&mut out).await.unwrap();
+
+    if out.len() > 0 {
+        return Ok(out);
+    }
+
+    let mut stderr = cmd.stderr.take().unwrap();
+    let mut err = String::new();
+    stdout.read_to_string(&mut err).await.unwrap();
+
+    if err.len() > 0 {
+        return Err(err);
+    }
+
+    return Ok(String::new())
 }
 
 async fn run_prompt(prompt_path: &str, input: &[u8]) -> String {
