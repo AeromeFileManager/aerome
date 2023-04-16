@@ -80,12 +80,14 @@ pub const APP_ICON_SCALABLE_WINDOW_MAXIMIZE_SYMBOLIC: &'static [u8] =
 pub const APP_ICON_SCALABLE_WINDOW_MINIMIZE_SYMBOLIC: &'static [u8] =
     include_bytes!("../assets/Yaru/scalable/window-minimize-symbolic.svg");
 
+pub const APP_ICON_MIMETYPE_IMAGE_X_GENERIC: &'static [u8] =
+    include_bytes!("../assets/Yaru/mimetypes/image-x-generic.png");
+
 pub fn install() {
     let icons_dir = dirs::data_local_dir()
         .map(|data_dir| data_dir.join(APP_NAME).join("Yaru"))
         .expect("Could not find the apps data directory");
 
-    println!("{icons_dir:?}");
     let places_dir = icons_dir.join("places");
     let scalable_dir = icons_dir.join("scalable");
 

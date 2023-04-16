@@ -18,6 +18,7 @@ mod constants;
 mod ipc;
 mod models;
 mod icons;
+mod thumbnails;
 
 use ipc::*;
 use models::{Suggestions,Folder,File,Options,Sort};
@@ -30,6 +31,7 @@ use std::process::Stdio;
 use std::sync::{Arc,Mutex};
 use std::env::current_dir;
 use std::fs;
+use std::fs::DirEntry;
 use std::cmp::Ordering;
 use std::time::Duration;
 use wry::{
@@ -45,6 +47,7 @@ use url::Url;
 use std::path::Path;
 use std::thread;
 use serde_json::json;
+use thumbnails::{ThumbnailSize,Thumbnails};
 
 fn main() -> wry::Result<()> {
     constants::install();
@@ -163,6 +166,7 @@ fn main() -> wry::Result<()> {
         }
     };
 
+    let thumbnails = Thumbnails::new();
     let window = WindowBuilder::new()
         .with_title("Future")
         .with_decorations(false)
@@ -204,22 +208,10 @@ fn main() -> wry::Result<()> {
                 .body(std::fs::read(&path).unwrap().into())
                 .map_err(Into::into)
         })
-        .with_custom_protocol("thumbnail".into(), |req| {
-            // https://specifications.freedesktop.org/thumbnail-spec/thumbnail-spec-latest.html
-
-            let hash = req.uri().host().unwrap();
-            let path = format!("/home/linuser/.cache/thumbnails/large/{}.png", hash);
-
+        .with_custom_protocol("thumbnail".into(), move |req| {
             Response::builder()
                 .header(CONTENT_TYPE, "image/png")
-                .body(std::fs::read(&path)
-                    .or_else(|_| {
-                        let path = format!("/home/linuser/.cache/thumbnails/medium/{}.png", hash);
-                        std::fs::read(&path)
-                    })
-                    .or_else(|_| std::fs::read("./assets/e08239b208f592aa0081561aecb42a3b.png"))
-                    .unwrap()
-                    .into())
+                .body(thumbnails.find(&req.uri(), ThumbnailSize::Normal).into())
                 .map_err(Into::into)
         })
         .build()?;
@@ -481,15 +473,21 @@ fn get_folder(path: &Path, options: &Options) -> Folder {
                 let name = entry.file_name().to_string_lossy().into_owned();
 
                 let ext = name.split('.').rev().next();
-                let graphic = if ext == Some("png") {
-                    let hash = generate_thumbnail_hash(entry.path().to_str().unwrap());
-                    Some(Url::parse(&format!("thumbnail://{hash}")).unwrap())
-                } else {
+                let icon_url = |entry: DirEntry| {
                     if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                         Some(get_folder_icon_url(&entry.path()))
                     } else {
                         Some(get_file_icon_url(&entry.path()))
                     }
+                };
+                let graphic = if ext == Some("png") {
+                    if let Some(thumbnail_url) = Thumbnails::url_from(&entry.path()) {
+                        Some(thumbnail_url)
+                    } else {
+                        icon_url(entry)
+                    }
+                } else {
+                    icon_url(entry)
                 };
 
                 File {
@@ -529,10 +527,6 @@ fn get_folder_icon_url(path: &Path) -> Url {
 fn get_file_icon_url(path: &Path) -> Url {
     // TODO
     Url::parse("icon://text-x-plain").unwrap()
-}
-
-fn generate_thumbnail_hash(s: &str) -> String {
-    format!("{:x}", md5::compute(&Url::parse(&format!("file://{s}")).unwrap().to_string()))
 }
 
 fn get_icon_theme(rt: &Runtime) -> String {

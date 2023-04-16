@@ -53,6 +53,11 @@ impl Icons {
                     size: 256,
                     r#type: ThemeType::Fixed
                 }),
+                (String::from("mimetypes"), ThemeContext {
+                    context: "".into(),
+                    size: 256,
+                    r#type: ThemeType::Fixed
+                }),
                 (String::from("places"), ThemeContext {
                     context: "".into(),
                     size: 32,
