@@ -14,6 +14,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+mod constants;
 mod ipc;
 mod models;
 mod icons;
@@ -46,6 +47,8 @@ use std::thread;
 use serde_json::json;
 
 fn main() -> wry::Result<()> {
+    constants::install();
+
     let folder = Arc::new(Mutex::new(get_folder(&current_dir().unwrap(), &Options::default())));
     let event_loop = EventLoop::<UserEvent>::with_user_event();
     let proxy = event_loop.create_proxy();
@@ -168,7 +171,7 @@ fn main() -> wry::Result<()> {
 
     window.set_visible(false);
 
-    let icons = Mutex::new(Icons::default());
+    let icons = Mutex::new(Icons::new());
 
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
@@ -183,7 +186,11 @@ fn main() -> wry::Result<()> {
                 .map(|(_, val)| val.to_owned().parse::<i32>().unwrap())
                 .unwrap_or(256);
 
-            let path = ic.find(&theme, icon, size, 1).unwrap();
+            let path = ic.find(&theme, icon, size, 1)
+                .or_else(|_| {
+                    ic.find(&theme, "error-symbolic", 32, 1)
+                })
+                .unwrap();
 
             let content_type = match path.extension().map(|s| s.to_str().unwrap()) {
                 Some("png") => "image/png",

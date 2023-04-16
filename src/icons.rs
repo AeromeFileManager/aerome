@@ -14,6 +14,8 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+use super::constants;
+
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::env;
@@ -27,10 +29,85 @@ use std::collections::HashMap;
 type ThemeName = String;
 type ThemePath = String;
 
-#[derive(Default)]
 pub struct Icons {
     cache: HashMap<Lookup, PathBuf>,
     themes: HashMap<ThemeName, Theme>
+}
+
+const FILE_MANAGER_THEME_NAME: &'static str = "FutureFileManager";
+
+impl Icons {
+    pub fn new() -> Self {
+        let mut themes = HashMap::new();
+
+        themes.insert(FILE_MANAGER_THEME_NAME.into(), Theme {
+            name: FILE_MANAGER_THEME_NAME.into(),
+            directories: vec![
+                "places".into(),
+                "scalable".into()
+            ],
+            inherits: vec![],
+            context: vec![
+                (String::from("places"), ThemeContext {
+                    context: "".into(),
+                    size: 256,
+                    r#type: ThemeType::Fixed
+                }),
+                (String::from("places"), ThemeContext {
+                    context: "".into(),
+                    size: 32,
+                    r#type: ThemeType::Scalable
+                })
+            ].into_iter().collect()
+        });
+
+        Icons {
+            cache: HashMap::new(),
+            themes
+        }
+    }
+
+    pub fn find(
+        &mut self,
+        theme: &str,
+        icon: &str,
+        size: i32,
+        scale: i32) -> Result<PathBuf, IconLookupFailure>
+    {
+        let lookup = Lookup::new(theme, icon, size, scale);
+
+        if let Some(path) = self.cache.get(&lookup) {
+            return Ok(path.to_owned());
+        }
+
+        let theme = if let Some(theme) = self.themes.get(theme) {
+            theme.clone()
+        } else {
+            let mut theme = Theme::load(theme)
+                .ok_or(IconLookupFailure::ThemeMissing(theme.to_owned()))?;
+
+            theme.inherits.push(self.themes.get(FILE_MANAGER_THEME_NAME).unwrap().clone());
+            self.themes.insert(theme.name.clone(), theme.clone());
+            theme
+        };
+
+        let fallback = if let Some(theme) = self.themes.get("hicolor") {
+            theme.clone()
+        } else {
+            let theme = Theme::load("hicolor")
+                .ok_or(IconLookupFailure::ThemeMissing("hicolor".to_owned()))?;
+
+            self.themes.insert("hicolor".to_owned(), theme.clone());
+            theme
+        };
+
+        if let Some(icon) = find_icon(icon, size, scale, &theme, &fallback) {
+            self.cache.insert(lookup, icon.clone());
+            Ok(icon)
+        } else {
+            Err(IconLookupFailure::IconResolutionFailed(lookup))
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -54,49 +131,6 @@ enum ThemeType {
     Fixed,
     Scalable,
     Threshold
-}
-
-impl Icons {
-    pub fn find(
-        &mut self,
-        theme: &str,
-        icon: &str,
-        size: i32,
-        scale: i32) -> Result<PathBuf, IconLookupFailure>
-    {
-        let lookup = Lookup::new(theme, icon, size, scale);
-
-        if let Some(path) = self.cache.get(&lookup) {
-            return Ok(path.to_owned());
-        }
-
-        let theme = if let Some(theme) = self.themes.get(theme) {
-            theme.clone()
-        } else {
-            let theme = Theme::load(theme)
-                .ok_or(IconLookupFailure::ThemeMissing(theme.to_owned()))?;
-
-            self.themes.insert(theme.name.clone(), theme.clone());
-            theme
-        };
-
-        let fallback = if let Some(theme) = self.themes.get("hicolor") {
-            theme.clone()
-        } else {
-            let theme = Theme::load("hicolor")
-                .ok_or(IconLookupFailure::ThemeMissing("hicolor".to_owned()))?;
-
-            self.themes.insert("hicolor".to_owned(), theme.clone());
-            theme
-        };
-
-        if let Some(icon) = find_icon(icon, size, scale, &theme, &fallback) {
-            self.cache.insert(lookup, icon.clone());
-            Ok(icon)
-        } else {
-            Err(IconLookupFailure::IconResolutionFailed(lookup))
-        }
-    }
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
@@ -262,6 +296,9 @@ fn get_basename_list() -> Vec<PathBuf> {
     iter::once(home_icons)
         .chain(xdg_data_dirs.into_iter())
         .chain(iter::once(Some(PathBuf::from("/usr/share/pixmaps"))))
+        .chain(iter::once(dirs::data_local_dir()
+            .map(|data_dir| data_dir.join(constants::APP_NAME))
+        ))
         .filter_map(|dir| dir)
         .collect()
 }
