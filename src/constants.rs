@@ -101,6 +101,9 @@ pub const APP_ICON_SCALABLE_WINDOW_MINIMIZE_SYMBOLIC: &'static [u8] =
 pub const APP_ICON_MIMETYPE_IMAGE_X_GENERIC: &'static [u8] =
     include_bytes!("../assets/Yaru/mimetypes/image-x-generic.png");
 
+pub const APP_ICON_MIMETYPE_TEXT_X_GENERIC: &'static [u8] =
+    include_bytes!("../assets/Yaru/mimetypes/text-x-generic.png");
+
 pub fn install() {
     install_icons();
     install_prompts();
@@ -130,9 +133,11 @@ fn install_icons() {
     fs::create_dir_all(&places_dir).unwrap();
     fs::create_dir_all(&scalable_dir).unwrap();
 
+    /*
     if places_dir.join("./folder.png").exists() {
         return;
     }
+    */
 
     fs::write(
         places_dir.join("./folder.png"),
@@ -245,4 +250,8 @@ fn install_icons() {
     fs::write(
         mimetypes_dir.join("./image-x-generic.png"),
         APP_ICON_MIMETYPE_IMAGE_X_GENERIC).unwrap();
+
+    fs::write(
+        mimetypes_dir.join("./text-x-generic.png"),
+        APP_ICON_MIMETYPE_TEXT_X_GENERIC).unwrap();
 }

@@ -193,6 +193,7 @@ fn main() -> wry::Result<()> {
 
             let path = ic.find(&theme, icon, size, 1)
                 .or_else(|_| {
+                    eprintln!("Couldn't find {icon} with {size} in {}", theme);
                     ic.find(&theme, "error-symbolic", 32, 1)
                 })
                 .unwrap();
@@ -517,5 +518,5 @@ fn get_folder_icon_url(path: &Path) -> Url {
 
 fn get_file_icon_url(path: &Path) -> Url {
     // TODO
-    Url::parse("icon://text-x-plain").unwrap()
+    Url::parse("icon://text-x-generic").unwrap()
 }
