@@ -21,6 +21,8 @@ use std::fs;
 use std::env;
 use std::iter;
 use std::collections::HashMap;
+use std::process::{Command,Stdio};
+use std::io::Read;
 
 // Relevant standards
 // https://specifications.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html
@@ -34,17 +36,16 @@ pub struct Icons {
     themes: HashMap<ThemeName, Theme>
 }
 
-const FILE_MANAGER_THEME_NAME: &'static str = "FutureFileManager";
-
 impl Icons {
     pub fn new() -> Self {
         let mut themes = HashMap::new();
 
-        themes.insert(FILE_MANAGER_THEME_NAME.into(), Theme {
-            name: FILE_MANAGER_THEME_NAME.into(),
+        themes.insert(constants::FILE_MANAGER_THEME_NAME.into(), Theme {
+            name: constants::FILE_MANAGER_THEME_NAME.into(),
             directories: vec![
                 "places".into(),
-                "scalable".into()
+                "mimetypes".into(),
+                "scalable".into(),
             ],
             inherits: vec![],
             context: vec![
@@ -58,13 +59,22 @@ impl Icons {
                     size: 256,
                     r#type: ThemeType::Fixed
                 }),
-                (String::from("places"), ThemeContext {
+                (String::from("scalable"), ThemeContext {
                     context: "".into(),
                     size: 32,
                     r#type: ThemeType::Scalable
                 })
             ].into_iter().collect()
         });
+
+        if cfg!(not(target_os = "linux")) {
+            // All conformant freedesktop icon implementations have to have a hicolor theme, but its
+            // not going to be there on Mac OS, so we add a dummy implementation here
+            themes.insert("hicolor".into(), Theme {
+                name: "hicolor".into(),
+                ..Theme::default()
+            });
+        }
 
         Icons {
             cache: HashMap::new(),
@@ -91,7 +101,9 @@ impl Icons {
             let mut theme = Theme::load(theme)
                 .ok_or(IconLookupFailure::ThemeMissing(theme.to_owned()))?;
 
-            theme.inherits.push(self.themes.get(FILE_MANAGER_THEME_NAME).unwrap().clone());
+            theme.inherits.push(self.themes
+                .get(constants::FILE_MANAGER_THEME_NAME).unwrap().clone()
+            );
             self.themes.insert(theme.name.clone(), theme.clone());
             theme
         };
@@ -112,6 +124,25 @@ impl Icons {
         } else {
             Err(IconLookupFailure::IconResolutionFailed(lookup))
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn get_current_theme_name() -> String {
+        let mut cmd = Command::new("gsettings")
+            .args(&["get", "org.gnome.desktop.interface", "icon-theme"])
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        let mut stdout = cmd.stdout.take().unwrap();
+        let mut result = String::new();
+        stdout.read_to_string(&mut result).unwrap();
+        result.replace("'", "").trim().to_string()
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn get_current_theme_name() -> String {
+        String::from(constants::FILE_MANAGER_THEME_NAME)
     }
 }
 

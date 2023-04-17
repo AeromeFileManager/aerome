@@ -19,6 +19,7 @@ mod ipc;
 mod models;
 mod icons;
 mod thumbnails;
+mod prompts;
 
 use ipc::*;
 use models::{Suggestions,Folder,File,Options,Sort};
@@ -56,7 +57,7 @@ fn main() -> wry::Result<()> {
     let event_loop = EventLoop::<UserEvent>::with_user_event();
     let proxy = event_loop.create_proxy();
     let rt = Runtime::new().unwrap();
-    let theme = get_icon_theme(&rt);
+    let theme = Icons::get_current_theme_name();
     let investigation: Mutex<AbortHandle> = Mutex::new(
         investigate(&rt, (*folder.lock().unwrap()).clone(), proxy.clone()));
 
@@ -295,7 +296,7 @@ fn communicate(
     let message = format!(r#"Given these files "{files}" in this directory "{dir}". {message}"#);
 
     rt.spawn(async move {
-        let result = run_prompt("prompts/communicate.pr", message.as_bytes()).await;
+        let result = run_prompt("communicate.pr", message.as_bytes()).await;
         let (kind, message) = result.split_once(":")
             .unwrap_or_else(|| ("FAILURE", "I'm sorry I don't understand, can you try again?"));
 
@@ -341,9 +342,12 @@ async fn run_script(bash_script: String, current_dir: &Path) -> Result<String, S
 }
 
 async fn run_prompt(prompt_path: &str, input: &[u8]) -> String {
-    let path = std::env::current_dir().unwrap().join("./bin/prompt");
-    let mut cmd = Command::new(path)
-        .arg(prompt_path)
+    let prompts_dir = dirs::data_local_dir()
+        .map(|data_dir| data_dir.join(constants::APP_NAME).join("prompts"))
+        .expect("Could not find the apps data directory");
+
+    let mut cmd = Command::new("prompt")
+        .arg(prompts_dir.join(prompt_path))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -363,25 +367,12 @@ async fn run_prompt(prompt_path: &str, input: &[u8]) -> String {
 fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -> AbortHandle {
     rt.spawn(async move {
         let path = std::env::current_dir().unwrap().join("./bin/prompt");
-        let mut cmd = Command::new(path)
-            .arg("prompts/describe.pr")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-
-        let mut stdin = cmd.stdin.take().unwrap();
         let files = folder.files.iter()
             .map(|f| format!("{}", f.name))
             .collect::<Vec<_>>()
             .join(", ");
 
-        stdin.write_all(files.as_bytes()).await.unwrap();
-        stdin.write_all(b"\n").await.unwrap();
-
-        let mut stdout = cmd.stdout.take().unwrap(); 
-        let mut result = String::new();
-        stdout.read_to_string(&mut result).await.unwrap();
+        let result = run_prompt("describe.pr", files.as_bytes()).await;
 
         let mut lines = result.lines();
         let purpose = lines.next().unwrap().replace("\"", "\\\"");
@@ -527,19 +518,4 @@ fn get_folder_icon_url(path: &Path) -> Url {
 fn get_file_icon_url(path: &Path) -> Url {
     // TODO
     Url::parse("icon://text-x-plain").unwrap()
-}
-
-fn get_icon_theme(rt: &Runtime) -> String {
-    rt.block_on(async {
-        let mut cmd = Command::new("gsettings")
-            .args(&["get", "org.gnome.desktop.interface", "icon-theme"])
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-
-        let mut stdout = cmd.stdout.take().unwrap();
-        let mut result = String::new();
-        stdout.read_to_string(&mut result).await.unwrap();
-        result.replace("'", "").trim().to_string()
-    })
 }

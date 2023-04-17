@@ -1,0 +1,43 @@
+conversation
+    history: true
+    stop:
+        - "Observation ->"
+    description: >
+        We're writing a Bash script. You have access to the following assistants:
+        [Pandoc] An expert in generating bash commands that use the pandoc cli program.
+        [Files] An expert at manipulating and moving files on the cli
+
+        Use the following format:
+        Question -> the input question you must answer
+        Thought -> you should always think about what to do
+        Action -> the action to take, should be one of the [assistant]
+        Action Input -> the input to the action
+        Observation -> the result of the action
+        ... (this Thought/Action/Action Input/Observation can repeat N times)
+        Thought -> I now know the final answer
+        Final Answer -> the final answer to the original input question
+{
+    match $AI {
+        (?s:.*Final Answer -> (.*)$) => `echo $1`,
+        (?s:.*Action -> Pandoc.*Action Input -> (.*)) => pandoc,
+        (?s:.*Action -> Files.*Action Input -> (.*)) => files,
+        (.*) => `echo "<FAIL> $1"`
+    }
+}
+
+pandoc
+    history: false
+    description: >
+        Output a bash command using pandoc that meets the following requirements
+{
+    `echo "Observation -> "$AI""` -> conversation
+}
+
+files
+    history: false
+    description: >
+        Output a bash script using mv, find, mkdir, ...etc to that meets the
+        following requirements
+{
+    `echo "Observation -> "$AI""` -> conversation
+}

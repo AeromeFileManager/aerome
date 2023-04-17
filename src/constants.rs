@@ -1,6 +1,24 @@
+/*
+ * Copyright (c) 2023 Jesse Tuchsen
+ *
+ * This file is part of Aerome.
+ *
+ * Aerome is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3 of the License.
+ *
+ * Aerome is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+ * the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+ * Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Aerome. If not, see
+ * <https://www.gnu.org/licenses/>.
+ */
+
 use std::fs;
 
+pub use super::prompts::*;
 pub const APP_NAME: &'static str = "Future";
+pub const FILE_MANAGER_THEME_NAME: &'static str = "FutureFileManager";
 
 pub const APP_ICON_PLACES_FOLDER: &'static [u8] =
     include_bytes!("../assets/Yaru/places/folder.png");
@@ -84,14 +102,31 @@ pub const APP_ICON_MIMETYPE_IMAGE_X_GENERIC: &'static [u8] =
     include_bytes!("../assets/Yaru/mimetypes/image-x-generic.png");
 
 pub fn install() {
-    let icons_dir = dirs::data_local_dir()
-        .map(|data_dir| data_dir.join(APP_NAME).join("Yaru"))
+    install_icons();
+    install_prompts();
+}
+
+fn install_prompts() {
+    let prompts_dir = dirs::data_local_dir()
+        .map(|data_dir| data_dir.join(APP_NAME).join("prompts"))
         .expect("Could not find the apps data directory");
 
+    fs::create_dir_all(&prompts_dir).expect("Could not write to the apps data directory");
+    fs::write(prompts_dir.join("./communicate.pr"), PROMPT_COMMUNICATE).unwrap();
+    fs::write(prompts_dir.join("./describe.pr"), PROMPT_COMMUNICATE).unwrap();
+}
+
+fn install_icons() {
+    let icons_dir = dirs::data_local_dir()
+        .map(|data_dir| data_dir.join(APP_NAME).join(FILE_MANAGER_THEME_NAME))
+        .expect("Could not find the apps data directory");
+
+    let mimetypes_dir = icons_dir.join("mimetypes");
     let places_dir = icons_dir.join("places");
     let scalable_dir = icons_dir.join("scalable");
 
     fs::create_dir_all(&icons_dir).expect("Could not write to the apps data directory");
+    fs::create_dir_all(&mimetypes_dir).unwrap();
     fs::create_dir_all(&places_dir).unwrap();
     fs::create_dir_all(&scalable_dir).unwrap();
 
@@ -207,4 +242,7 @@ pub fn install() {
         scalable_dir.join("./window-minimize-symbolic.svg"),
         APP_ICON_SCALABLE_WINDOW_MINIMIZE_SYMBOLIC).unwrap();
 
+    fs::write(
+        mimetypes_dir.join("./image-x-generic.png"),
+        APP_ICON_MIMETYPE_IMAGE_X_GENERIC).unwrap();
 }

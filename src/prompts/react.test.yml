@@ -1,0 +1,14 @@
+---
+react:
+    tests:
+        - expected: ^foobar
+          user: "Question -> What is the answer to life, the universe, and everything?"
+          ai: >
+            Thought -> Some insightful thoughts
+            Action -> Search
+            Action Input -> What's the answer?
+
+        - expected: "hmm 42"
+          user: "Question -> What is the answer to life, the universe, and everything?"
+          ai: >
+            Final Answer -> 42

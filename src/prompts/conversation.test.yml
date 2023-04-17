@@ -1,0 +1,34 @@
+---
+conversation:
+    tests:
+        - expected: Gimme a document
+          user: "Question -> What is the answer to life, the universe, and everything?"
+          ai: >
+            Thought -> Some insightful thoughts
+            Action -> Pandoc
+            Action Input -> Gimme a document
+
+        - expected: Move some files
+          user: "Question -> What is the answer to life, the universe, and everything?"
+          ai: >
+            Thought -> Some insightful thoughts
+            Action -> Pandoc
+            Action Input -> Gimme a document
+            Observation -> A thing
+            Action -> Files
+            Action Input -> Move some files
+
+        - expected: 42
+          user: "Question -> What is the answer to life, the universe, and everything?"
+          ai: >
+            Thought -> Some insightful thoughts
+            Action -> Pandoc
+            Action Input -> Gimme a document
+            Observation -> A thing
+            Thought -> Some thoughts...
+            Final Answer -> 42
+
+        - expected: ^<FAIL>
+          user: "Question -> What is the answer to life, the universe, and everything?"
+          ai: >
+            I've gone nuts
