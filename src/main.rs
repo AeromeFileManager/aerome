@@ -22,7 +22,7 @@ mod thumbnails;
 mod prompts;
 
 use ipc::*;
-use models::{Suggestions,Folder,File,Options,Sort};
+use models::{Suggestions,Folder,File,FileType,Options,Sort};
 use icons::Icons;
 use tokio::{runtime::{Runtime},process::Command};
 use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
@@ -58,8 +58,11 @@ fn main() -> wry::Result<()> {
     let proxy = event_loop.create_proxy();
     let rt = Runtime::new().unwrap();
     let theme = Icons::get_current_theme_name();
+    /*
     let investigation: Mutex<AbortHandle> = Mutex::new(
         investigate(&rt, (*folder.lock().unwrap()).clone(), proxy.clone()));
+    */
+    let investigation: Mutex<AbortHandle> = Mutex::new(dummy_abort_handle(&rt));
 
     let handler_folder = folder.clone();
     let handler = move |window: &Window, req: String| {
@@ -145,7 +148,7 @@ fn main() -> wry::Result<()> {
             },
             Cmd::Evaluate { script, options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
-                let result = run_script_sync(script, &unlocked.path);
+                let result = run_script_sync(format!("{script}\n echo -e {}", r#""\n""#), &unlocked.path);
 
                 *unlocked = get_folder(&unlocked.path, &options);
 
@@ -245,16 +248,16 @@ fn main() -> wry::Result<()> {
                         Ok(message) => {
                             let message = message.replace("`", "\\`");
                             let message = format!("Command finished with result:\n\n{message}");
+                            let script = format!("addConversationItem('ai', `{message}`)");
 
-                            webview.evaluate_script("addConversationItem('ai', `{message}`)")
-                                .unwrap();
+                            webview.evaluate_script(&script).unwrap();
                         },
                         Err(message) => {
                             let message = message.replace("`", "\\`");
                             let message = format!("Command finished with error:\n\n{message}");
+                            let script = format!("addConversationItem('ai', `{message}`)");
 
-                            webview.evaluate_script("addConversationItem('ai', `{message}`)")
-                                .unwrap();
+                            webview.evaluate_script(&script).unwrap();
                         }
                     }
                 }
@@ -263,7 +266,9 @@ fn main() -> wry::Result<()> {
             Event::UserEvent(UserEvent::Ai(response)) => match response {
                 AiResponse::Success(success) => {
                     let message = "Sure, I can do that. Please review this script before evaluating it:";
-                    let code = success.replace('`', "\\`");
+                    let code = success.replace('\\', "\\\\")
+                        .replace('`', "\\`")
+                        .replace('$', "\\$");
                     let script = &format!("addConversationItem('ai', `{message}`, `{code}`)");
 
                     webview.evaluate_script(script).unwrap();
@@ -293,8 +298,14 @@ fn communicate(
     folder: &Folder)
 {
     let dir = folder.path.to_string_lossy();
-    let files = folder.files.iter().map(|f| f.name.to_string()).collect::<Vec<_>>().join(", ");
-    let message = format!(r#"Given these files "{files}" in this directory "{dir}". {message}"#);
+    let files = folder.files.iter()
+        .filter_map(|f| matches!(f.kind, FileType::File).then(|| f.name.to_string()))
+        .collect::<Vec<_>>().join(", ");
+    let folders = folder.files.iter()
+        .filter_map(|f| matches!(f.kind, FileType::Folder).then(|| f.name.to_string()))
+        .collect::<Vec<_>>().join(", ");
+
+    let message = format!(r#"Given these files "{files}" and folders "{folders}" in this directory "{dir}". {message}"#);
 
     rt.spawn(async move {
         let result = run_prompt("communicate.pr", message.as_bytes()).await;
@@ -320,26 +331,15 @@ async fn run_script(bash_script: String, current_dir: &Path) -> Result<String, S
         .current_dir(current_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()
+        .output()
+        .await
         .unwrap();
 
-    let mut stdout = cmd.stdout.take().unwrap();
-    let mut out = String::new();
-    stdout.read_to_string(&mut out).await.unwrap();
-
-    if out.len() > 0 {
-        return Ok(out);
+    if cmd.status.success() {
+        Ok(String::from_utf8(cmd.stdout).unwrap())
+    } else {
+        Err(String::from_utf8(cmd.stderr).unwrap())
     }
-
-    let mut stderr = cmd.stderr.take().unwrap();
-    let mut err = String::new();
-    stdout.read_to_string(&mut err).await.unwrap();
-
-    if err.len() > 0 {
-        return Err(err);
-    }
-
-    return Ok(String::new())
 }
 
 async fn run_prompt(prompt_path: &str, input: &[u8]) -> String {
@@ -365,9 +365,13 @@ async fn run_prompt(prompt_path: &str, input: &[u8]) -> String {
     result
 }
 
+fn dummy_abort_handle(rt: &Runtime) -> AbortHandle {
+    rt.spawn(async {}).abort_handle()
+}
+
+/*
 fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -> AbortHandle {
     rt.spawn(async move {
-        let path = std::env::current_dir().unwrap().join("./bin/prompt");
         let files = folder.files.iter()
             .map(|f| format!("{}", f.name))
             .collect::<Vec<_>>()
@@ -379,16 +383,15 @@ fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -
         let purpose = lines.next().unwrap().replace("\"", "\\\"");
         let actions = lines.next().unwrap();
 
-        /*
         proxy.send_event(UserEvent::UpdateSuggestions {
             description: serde_json::from_str(&format!(r#"{{
                 "purpose": "{purpose}",
                 "actions": {actions}
             }}"#)).unwrap()
         });
-        */
     }).abort_handle()
 }
+*/
 
 fn get_folder(path: &Path, options: &Options) -> Folder {
     let files = if path.is_dir() {
@@ -463,8 +466,6 @@ fn get_folder(path: &Path, options: &Options) -> Folder {
         files.into_iter()
             .map(|entry| {
                 let name = entry.file_name().to_string_lossy().into_owned();
-
-                let ext = name.split('.').rev().next();
                 let icon_url = |entry: DirEntry| {
                     if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                         Some(get_folder_icon_url(&entry.path()))
@@ -472,6 +473,16 @@ fn get_folder(path: &Path, options: &Options) -> Folder {
                         Some(get_file_icon_url(&entry.path()))
                     }
                 };
+                let ext = name.split('.').rev().next();
+                let kind = entry.file_type()
+                    .map(|kind| if kind.is_dir() {
+                        FileType::Folder
+                    } else if kind.is_symlink() {
+                        FileType::Link
+                    } else {
+                        FileType::File
+                    })
+                    .unwrap_or(FileType::File);
                 let graphic = if ext == Some("png") {
                     if let Some(thumbnail_url) = Thumbnails::url_from(&entry.path()) {
                         Some(thumbnail_url)
@@ -484,6 +495,7 @@ fn get_folder(path: &Path, options: &Options) -> Folder {
 
                 File {
                     name,
+                    kind,
                     graphic
                 }
             })

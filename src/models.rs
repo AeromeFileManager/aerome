@@ -27,7 +27,15 @@ pub struct Folder {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct File {
     pub name: String,
+    pub kind: FileType,
     pub graphic: Option<Url>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FileType {
+    File,
+    Folder,
+    Link
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
