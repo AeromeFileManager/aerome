@@ -1,37 +1,26 @@
-# Action to find a bash script to execute the requested commands
-
-explore
-    history: false
-    description: >
-        Is it possible to write a bash script to accomplish what the user is
-        asking for? It's ok to say no. Explain your answers, starts every
-        response with either a "Yes" or a "No".
-
-        Can we move every file that starts with "Screenshot" into a screenshots directory?
-        Yes, it's possible to do that with mkdir and mv
-{
-    match $AI {
-        (?i:^Yes) => `echo $USER` -> command,
-        (?is:^No[,|.]?\s*(.*)) => `
-            echo "FAILURE:$1"
-        `,
-        (?s:.*) => `
-            mkdir -p ./failures;
-            echo "$AI" >> ./failures/explore;
-            echo "FAILURE:I'm sorry I don't understand, can you try again?"
-        `
-    }
-}
-
 command
     history: false
+    temperature: 0
     description: >
         Write a bash script to accomplish this task. Output the script surrounded by
         "```" like a markdown code block. No extra commentary on the script is
         required.
 {
     match $AI {
-        (?s:```(?:bash|sh)?\s*(?:#!/bin/bash)?\s*(.*)\s*```) => `echo "SUCCESS:$1"`,
-        (?s:.*) => `echo -e "$0" >> failures/command`
+        (?s:```(?:bash|sh)?\s*(?:#!/bin/bash)?\s*(.*)\s*```) =>
+            `echo $1` -> command_double_checker,
+
+        (?s:.*) =>
+            `echo -e "$0" >> failures/command`
     }
+}
+
+command_double_checker
+    history: false
+    temperature: 0
+    description: >
+        Can you check this bash script for syntax errors and correct it? Output
+        JUST THE SCRIPT as your response.
+{
+    `echo "SUCCESS:$1"`
 }
