@@ -449,6 +449,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "future"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "http",
+ "md5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+ "wry",
+]
+
+[[package]]
 name = "futures-channel"
 version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1965,20 +1979,6 @@ name = "typenum"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "497961ef93d974e23eb6f433eb5fe1b7930b659f06d12dec6fc44a8f554c0bba"
-
-[[package]]
-name = "under"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "http",
- "md5",
- "serde",
- "serde_json",
- "tokio",
- "url",
- "wry",
-]
 
 [[package]]
 name = "unicode-bidi"
