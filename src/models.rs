@@ -21,21 +21,35 @@ use url::Url;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Folder {
     pub path: PathBuf,
-    pub files: Vec<File>,
+    pub files: Vec<FolderListing>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct File {
+pub struct FolderListing {
     pub name: String,
-    pub kind: FileType,
+    pub kind: FolderListingType,
     pub graphic: Option<Url>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum FileType {
+pub enum FolderListingType {
     File,
     Folder,
     Link
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FileMetadata {
+    pub path: PathBuf,
+    pub name: String,
+    pub graphic: Option<Url>,
+    pub openers: Vec<FileOpener>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FileOpener {
+    pub name: String,
+    pub graphic: Option<Url>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

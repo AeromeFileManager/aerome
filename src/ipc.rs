@@ -15,7 +15,8 @@
  */
 
 use serde::{Deserialize,Serialize};
-use crate::{Folder,Suggestions,Options};
+use crate::{Folder,FileMetadata,Suggestions,Options};
+use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
@@ -57,6 +58,9 @@ pub enum WindowCmd {
 pub enum UserEvent {
     CloseWindow,
     ExecEval(),
+    UpdateFileDeepLook {
+        file: FileMetadata
+    },
     UpdateFolder {
         folder: Folder,
         script_result: Option<Result<String, String>>

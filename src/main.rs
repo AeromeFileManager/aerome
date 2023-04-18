@@ -22,7 +22,7 @@ mod thumbnails;
 mod prompts;
 
 use ipc::*;
-use models::{Suggestions,Folder,File,FileType,Options,Sort};
+use models::{Suggestions,Folder,FolderListing,FileMetadata,FolderListingType,Options,Sort};
 use icons::Icons;
 use tokio::{runtime::{Runtime},process::Command};
 use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
@@ -80,30 +80,33 @@ fn main() -> wry::Result<()> {
                         folder: (*unlocked).clone(),
                         script_result: None
                     });
-
-                    /*
-                    let mut ongoing = investigation.lock().unwrap();
-                    ongoing.abort();
-
-                    *ongoing = investigate(&rt, unlocked.clone(), proxy.clone());
-                    */
                 }
             },
             Cmd::Forward { to, options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
-                *unlocked = get_folder(&unlocked.path.join(to), &options);
+                let next = unlocked.path.join(to);
 
-                proxy.send_event(UserEvent::UpdateFolder {
-                    folder: (*unlocked).clone(),
-                    script_result: None
-                });
-
-                /*
-                let mut ongoing = investigation.lock().unwrap();
-                ongoing.abort();
-
-                *ongoing = investigate(&rt, unlocked.clone(), proxy.clone());
-                */
+                if next.is_file() {
+                    if !open(&next) {
+                        *unlocked = get_folder(&next, &options);
+                        proxy.send_event(UserEvent::UpdateFileDeepLook {
+                            file: FileMetadata {
+                                name: next.file_name()
+                                    .map(|s| s.to_string_lossy())
+                                    .unwrap_or_default().to_string(),
+                                path: next,
+                                graphic: None,
+                                openers: vec![]
+                            }
+                        });
+                    }
+                } else {
+                    *unlocked = get_folder(&next, &options);
+                    proxy.send_event(UserEvent::UpdateFolder {
+                        folder: (*unlocked).clone(),
+                        script_result: None
+                    });
+                }
             },
             Cmd::Jump { to, options } => {
                 let path = if to.starts_with("~/") {
@@ -236,6 +239,11 @@ fn main() -> wry::Result<()> {
                 webview.evaluate_script(&format!("setMissingFolder({})", &stringified)).unwrap();
             },
     
+            Event::UserEvent(UserEvent::UpdateFileDeepLook { file }) => {
+                let stringified = serde_json::to_string(&file).unwrap();
+                webview.evaluate_script(&format!("setFileDeepLook({})", &stringified)).unwrap();
+            },
+
             Event::UserEvent(UserEvent::UpdateFolder { folder, script_result }) => {
                 let stringified = serde_json::to_string(&folder).unwrap();
                 webview.evaluate_script(&format!("setFolder({})", &stringified)).unwrap();
@@ -291,6 +299,41 @@ fn main() -> wry::Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
+fn open(path: &Path) -> bool {
+    Runtime::new()
+        .unwrap()
+        .block_on(async move {
+            let result = Command::new("xdg-open")
+                .args(&[ &path ])
+                .output()
+                .await
+                .unwrap();
+
+            match result.status.code() {
+                Some(XDG_OPEN_ERROR_APPLICATION_NOT_FOUND) |
+                Some(XDG_OPEN_ERROR_ACTION_FAILED) => false,
+                _ => true
+            }
+        })
+}
+
+#[cfg(target_os = "macos")]
+fn open(path: &Path) -> bool {
+    Runtime::new().unwrap().block_on(async move {
+        Command::new("open")
+            .args(&[ &path ])
+            .output()
+            .await
+            .unwrap()
+            .status
+            .success()
+    })
+}
+
+const XDG_OPEN_ERROR_APPLICATION_NOT_FOUND: i32 = 3;
+const XDG_OPEN_ERROR_ACTION_FAILED: i32 = 4;
+
 fn communicate(
     rt: &Runtime,
     message: &str,
@@ -299,10 +342,10 @@ fn communicate(
 {
     let dir = folder.path.to_string_lossy();
     let files = folder.files.iter()
-        .filter_map(|f| matches!(f.kind, FileType::File).then(|| f.name.to_string()))
+        .filter_map(|f| matches!(f.kind, FolderListingType::File).then(|| f.name.to_string()))
         .collect::<Vec<_>>().join(", ");
     let folders = folder.files.iter()
-        .filter_map(|f| matches!(f.kind, FileType::Folder).then(|| f.name.to_string()))
+        .filter_map(|f| matches!(f.kind, FolderListingType::Folder).then(|| f.name.to_string()))
         .collect::<Vec<_>>().join(", ");
 
     let message = format!(r#"Given these files "{files}" and folders "{folders}" in this directory "{dir}". {message}"#);
@@ -476,13 +519,13 @@ fn get_folder(path: &Path, options: &Options) -> Folder {
                 let ext = name.split('.').rev().next();
                 let kind = entry.file_type()
                     .map(|kind| if kind.is_dir() {
-                        FileType::Folder
+                        FolderListingType::Folder
                     } else if kind.is_symlink() {
-                        FileType::Link
+                        FolderListingType::Link
                     } else {
-                        FileType::File
+                        FolderListingType::File
                     })
-                    .unwrap_or(FileType::File);
+                    .unwrap_or(FolderListingType::File);
                 let graphic = if ext == Some("png") {
                     if let Some(thumbnail_url) = Thumbnails::url_from(&entry.path()) {
                         Some(thumbnail_url)
@@ -493,13 +536,13 @@ fn get_folder(path: &Path, options: &Options) -> Folder {
                     icon_url(entry)
                 };
 
-                File {
+                FolderListing {
                     name,
                     kind,
                     graphic
                 }
             })
-            .collect::<Vec<File>>()
+            .collect::<Vec<FolderListing>>()
     } else {
         vec![]
     };
@@ -531,4 +574,16 @@ fn get_folder_icon_url(path: &Path) -> Url {
 fn get_file_icon_url(path: &Path) -> Url {
     // TODO
     Url::parse("icon://text-x-generic").unwrap()
+    /*
+     * figured this one out on linux, use the cli program: xdg-mime query filetype {filename}
+     * it'll return the mimetype thats used as an icon we can look up, so just:
+
+     * icon://$(xdg-mime query filetype {filename})
+
+     * will work. The man page has links to the spec, which links to c libraries for mime
+     * lookups. For Mac OS I probably need to import that library and install the entires
+     * /usr/share/mime folder if i want it to work. I could also take a look at how Mac OS
+     * handles mimetypes, but given I've already leaned into the Yaru theme, this is the
+     * faster path
+     */
 }

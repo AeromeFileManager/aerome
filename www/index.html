@@ -249,6 +249,20 @@
         min-height: 20px;
     }
 
+    div#file-deep-look.error {
+        content: '         Couldn\'t Open File';
+        width: 200px;
+        height: 200px;
+        background: url(icon://error-symbolic?size=32);
+        background-repeat: no-repeat;
+        background-size: 150px;
+        position: absolute;
+        background-position-y: 40px;
+        position: absolute;
+        left: calc(50% - 45px);
+        top: 120px;
+    }
+
     ul#files.missing::after {
         content: '         Missing Directory';
         width: 200px;
@@ -569,6 +583,7 @@
 
         <div class="files-wrapper">
             <ul id="files"></ul>
+            <div id="file-deep-look"></div>
         </div>
 
         <div class="spacer" aria-hidden=true></div>
@@ -689,18 +704,30 @@
             addConversationItem('user', message);
         });
 
+        window.setFileDeepLook = ({ name, path, openers }) => {
+            // TODO: This is meant to have extended file attributes, large thumbnails,
+            // and an "open with" view. Also it'll focus the model to operating on just
+            // the one file. For now though, it serves as an error screen for a failure
+            // to open a file when xdg-open can't find a proper application
+            resetFolder(path);
+
+            const isFileOpenError = !openers.length;
+            if (isFileOpenError) {
+                const el = document.getElementById('file-deep-look');
+                el.innerHTML = '';
+                el.classList.add('error');
+            } else {
+                el.classList.remove('error');
+            }
+        };
+
         let initialized = false;
         window.setFolder = ({ path, files }) => {
             const filesEl = document.getElementById('files');
             const folderEl = document.getElementById('folder');
 
-            filesEl.classList.remove('missing');
-
-            filesEl.innerHTML = '';
-            folderEl.textContent = path;
-
-            folderEl.blur();
-            filesEl.focus();
+            resetFolder(path);
+            document.getElementById('file-deep-look').classList.remove('error');
 
             for (const file of files) {
                 const li = document.createElement('li');
@@ -822,6 +849,19 @@
                 'conversation'
             );
         };
+
+        function resetFolder(path) {
+            const filesEl = document.getElementById('files');
+            const folderEl = document.getElementById('folder');
+
+            filesEl.classList.remove('missing');
+
+            filesEl.innerHTML = '';
+            folderEl.textContent = path;
+
+            folderEl.blur();
+            filesEl.focus();
+        }
 
         function detailsAnimationOpen(details, e) {
             if (details.hasAttribute("open")) {
