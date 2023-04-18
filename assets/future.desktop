@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Terminal=false
+Exec=future
+Name=Future
+Comment=Future File Manager
+Icon=future
+Categories=GNOME;GTK;

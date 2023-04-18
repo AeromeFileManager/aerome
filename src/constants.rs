@@ -15,10 +15,16 @@
  */
 
 use std::fs;
-
 pub use super::prompts::*;
+
 pub const APP_NAME: &'static str = "Future";
 pub const FILE_MANAGER_THEME_NAME: &'static str = "FutureFileManager";
+
+pub const APP_DESKTOP_ENTRY: &'static [u8] =
+    include_bytes!("../assets/future.desktop");
+
+pub const APP_ICON: &'static [u8] =
+    include_bytes!("../assets/icon/icon.png");
 
 pub const APP_ICON_PLACES_FOLDER: &'static [u8] =
     include_bytes!("../assets/Yaru/places/folder.png");
@@ -107,7 +113,24 @@ pub const APP_ICON_MIMETYPE_TEXT_X_GENERIC: &'static [u8] =
 pub fn install() {
     install_icons();
     install_prompts();
+    install_desktop_files();
 }
+
+#[cfg(target_os = "linux")]
+fn install_desktop_files() {
+    if let Some(applications_dir) = dirs::data_local_dir().map(|d| d.join("applications")) {
+        fs::create_dir_all(&applications_dir).expect("Could not write to the apps data directory");
+        fs::write(applications_dir.join("future.desktop"), APP_DESKTOP_ENTRY).unwrap();
+    }
+
+    if let Some(icons_dir) = dirs::data_local_dir().map(|d| d.join("icons")) {
+        fs::create_dir_all(&icons_dir).expect("Could not write to the apps data directory");
+        fs::write(icons_dir.join("future.png"), APP_ICON).unwrap();
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn install_desktop_files() {}
 
 fn install_prompts() {
     let prompts_dir = dirs::data_local_dir()
