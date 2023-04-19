@@ -17,6 +17,7 @@
 use serde::{Deserialize,Serialize};
 use crate::{Folder,FileMetadata,Suggestions,Options};
 use std::path::PathBuf;
+use url::Url;
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
@@ -68,10 +69,20 @@ pub enum UserEvent {
     UpdateSuggestions {
         description: Suggestions
     },
+    UpdateThumbnail {
+        thumbnail: ThumbnailUpdate
+    },
     NonexistentFolder {
         path: String
     },
     Ai(AiResponse),
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbnailUpdate {
+    pub name: String,
+    pub url: Url
 }
 
 #[derive(Deserialize, Serialize)]

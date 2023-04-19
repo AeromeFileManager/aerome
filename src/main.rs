@@ -27,14 +27,15 @@ use icons::Icons;
 use tokio::{runtime::{Runtime},process::Command};
 use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
 use tokio::task::AbortHandle;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{PathBuf,Path};
 use std::process::Stdio;
 use std::sync::{Arc,Mutex};
 use std::env::current_dir;
-use std::fs;
 use std::fs::DirEntry;
 use std::cmp::Ordering;
 use std::time::Duration;
+use std::thread;
 use wry::{
     application::{
         event::{Event,StartCause,WindowEvent},
@@ -45,36 +46,41 @@ use wry::{
     webview::WebViewBuilder
 };
 use url::Url;
-use std::path::Path;
-use std::thread;
 use serde_json::json;
 use thumbnails::{ThumbnailSize,Thumbnails};
+use xdg_mime::{SharedMimeInfo, Guess};
 
 fn main() -> wry::Result<()> {
     constants::install();
 
-    let folder = Arc::new(Mutex::new(get_folder(&current_dir().unwrap(), &Options::default())));
+    let icons = Mutex::new(Icons::new());
+    let mime_db = SharedMimeInfo::new();
     let event_loop = EventLoop::<UserEvent>::with_user_event();
+    let (thumbnails, handle) = Thumbnails::new(event_loop.create_proxy());
+    let folder = Arc::new(Mutex::new(
+        get_folder(&current_dir().unwrap(), &Options::default(), &mime_db, &thumbnails)));
     let proxy = event_loop.create_proxy();
     let rt = Runtime::new().unwrap();
     let theme = Icons::get_current_theme_name();
-    /*
-    let investigation: Mutex<AbortHandle> = Mutex::new(
-        investigate(&rt, (*folder.lock().unwrap()).clone(), proxy.clone()));
-    */
     let investigation: Mutex<AbortHandle> = Mutex::new(dummy_abort_handle(&rt));
 
     let handler_folder = folder.clone();
+    let handler_thumbnails = thumbnails.clone();
     let handler = move |window: &Window, req: String| {
         match serde_json::from_str(req.as_str()).unwrap() {
             Cmd::Initialized => {
+                let path = std::env::current_dir().unwrap()
+                    .join("assets").join("icon").join("icon")
+                    .with_extension("png");
+
+                handler_thumbnails.generate(&path);
                 window.set_visible(true);
             },
             Cmd::Back { options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
 
                 if let Some(parent) = unlocked.path.parent() {
-                    *unlocked = get_folder(&parent, &options);
+                    *unlocked = get_folder(&parent, &options, &mime_db, &handler_thumbnails);
 
                     proxy.send_event(UserEvent::UpdateFolder {
                         folder: (*unlocked).clone(),
@@ -88,7 +94,7 @@ fn main() -> wry::Result<()> {
 
                 if next.is_file() {
                     if !open(&next) {
-                        *unlocked = get_folder(&next, &options);
+                        *unlocked = get_folder(&next, &options, &mime_db, &handler_thumbnails);
                         proxy.send_event(UserEvent::UpdateFileDeepLook {
                             file: FileMetadata {
                                 name: next.file_name()
@@ -101,7 +107,7 @@ fn main() -> wry::Result<()> {
                         });
                     }
                 } else {
-                    *unlocked = get_folder(&next, &options);
+                    *unlocked = get_folder(&next, &options, &mime_db, &handler_thumbnails);
                     proxy.send_event(UserEvent::UpdateFolder {
                         folder: (*unlocked).clone(),
                         script_result: None
@@ -125,7 +131,7 @@ fn main() -> wry::Result<()> {
                     });
                 } else {
                     let mut unlocked = handler_folder.lock().unwrap();
-                    *unlocked = get_folder(&path, &options);
+                    *unlocked = get_folder(&path, &options, &mime_db, &handler_thumbnails);
 
                     proxy.send_event(UserEvent::UpdateFolder {
                         folder: (*unlocked).clone(),
@@ -153,7 +159,7 @@ fn main() -> wry::Result<()> {
                 let mut unlocked = handler_folder.lock().unwrap();
                 let result = run_script_sync(format!("{script}\n echo -e {}", r#""\n""#), &unlocked.path);
 
-                *unlocked = get_folder(&unlocked.path, &options);
+                *unlocked = get_folder(&unlocked.path, &options, &mime_db, &handler_thumbnails);
 
                 proxy.send_event(UserEvent::UpdateFolder {
                     folder: (*unlocked).clone(),
@@ -162,7 +168,7 @@ fn main() -> wry::Result<()> {
             },
             Cmd::Options { options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
-                *unlocked = get_folder(&unlocked.path, &options);
+                *unlocked = get_folder(&unlocked.path, &options, &mime_db, &handler_thumbnails);
 
                 proxy.send_event(UserEvent::UpdateFolder {
                     folder: (*unlocked).clone(),
@@ -173,7 +179,6 @@ fn main() -> wry::Result<()> {
         }
     };
 
-    let thumbnails = Thumbnails::new();
     let window = WindowBuilder::new()
         .with_title("Future")
         .with_decorations(false)
@@ -181,8 +186,6 @@ fn main() -> wry::Result<()> {
         .build(&event_loop)?;
 
     window.set_visible(false);
-
-    let icons = Mutex::new(Icons::new());
 
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
@@ -219,7 +222,7 @@ fn main() -> wry::Result<()> {
         .with_custom_protocol("thumbnail".into(), move |req| {
             Response::builder()
                 .header(CONTENT_TYPE, "image/png")
-                .body(thumbnails.find(&req.uri(), ThumbnailSize::Normal).into())
+                .body(thumbnails.find(&req.uri(), ThumbnailSize::Large).into())
                 .map_err(Into::into)
         })
         .build()?;
@@ -239,6 +242,11 @@ fn main() -> wry::Result<()> {
                 webview.evaluate_script(&format!("setMissingFolder({})", &stringified)).unwrap();
             },
     
+            Event::UserEvent(UserEvent::UpdateThumbnail { thumbnail }) => {
+                let stringified = serde_json::to_string(&thumbnail).unwrap();
+                webview.evaluate_script(&format!("updateThumbnail({})", &stringified)).unwrap();
+            },
+
             Event::UserEvent(UserEvent::UpdateFileDeepLook { file }) => {
                 let stringified = serde_json::to_string(&file).unwrap();
                 webview.evaluate_script(&format!("setFileDeepLook({})", &stringified)).unwrap();
@@ -436,7 +444,12 @@ fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -
 }
 */
 
-fn get_folder(path: &Path, options: &Options) -> Folder {
+fn get_folder(
+    path: &Path,
+    options: &Options,
+    mime_db: &SharedMimeInfo,
+    thumbnails: &Thumbnails) -> Folder
+{
     let files = if path.is_dir() {
         let (mut folders, mut files) = fs::read_dir(&path)
             .unwrap()
@@ -526,14 +539,21 @@ fn get_folder(path: &Path, options: &Options) -> Folder {
                         FolderListingType::File
                     })
                     .unwrap_or(FolderListingType::File);
-                let graphic = if ext == Some("png") {
-                    if let Some(thumbnail_url) = Thumbnails::url_from(&entry.path()) {
-                        Some(thumbnail_url)
-                    } else {
-                        icon_url(entry)
-                    }
-                } else {
-                    icon_url(entry)
+
+                let guess = mime_db.guess_mime_type()
+                    .file_name(&name)
+                    .guess();
+
+                let graphic = match (guess.uncertain(), guess.mime_type()) {
+                    (false, mime) if mime.type_() == mime::IMAGE => {
+                        let path = entry.path();
+
+                        thumbnails.url_from(&path).or_else(|| {
+                            thumbnails.generate(&path);
+                            icon_url(entry)
+                        })
+                    },
+                    _ => icon_url(entry),
                 };
 
                 FolderListing {
