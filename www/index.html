@@ -227,10 +227,16 @@
         top: calc(var(--window-drop-shadow-margin) + 10px);
         height: 36px;
         width: 80px;
+        transition: background 0.3s ease-in-out, height 0.2s ease-in-out, top 0.2s ease-in-out;
     }
 
     header.compressed button#back {
-        opacity: 0;
+        background: transparent;
+        border: 0.1px solid pink;
+        color: white;
+        height: 18px;
+        font-size: 12px;
+        top: calc(var(--window-drop-shadow-margin) + 6px)
     }
 
     h2 { font-size: 14px; }
