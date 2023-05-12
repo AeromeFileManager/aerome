@@ -17,8 +17,9 @@
 use std::fs;
 pub use super::prompts::*;
 
-pub const APP_NAME: &'static str = "Future";
-pub const FILE_MANAGER_THEME_NAME: &'static str = "FutureFileManager";
+pub const BACKEND_URL: &'static str = "http://localhost:9008";
+pub const APP_NAME: &'static str = "aerome";
+pub const FILE_MANAGER_THEME_NAME: &'static str = "AeromeFileManager";
 
 pub const APP_DESKTOP_ENTRY: &'static [u8] =
     include_bytes!("../assets/future.desktop");

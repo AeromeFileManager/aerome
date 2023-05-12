@@ -73,6 +73,29 @@ pub struct Options {
     pub grid_scale: f32
 }
 
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    pub account: Option<Account>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Account {
+    Direct(AccountDirect),
+    Aerome(AccountAerome)
+}
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AccountDirect(pub String);
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AccountAerome {
+    pub active: bool,
+    pub email: String,
+    pub key: String,
+}
+
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub enum Sort {
     #[default]

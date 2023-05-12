@@ -15,6 +15,7 @@
 -->
 <!doctype html>
 
+<base target="_blank" />
 <style>
     @keyframes open {
         0% { opacity: 0 }
@@ -42,8 +43,23 @@
 
     html {
         margin: 0;
-        --primary-bg: rgba(26, 25, 25, 1);
+
+        --color-dim-gray: #776d69ff;
+        --color-antique-white: #fef0ddff;
+        --color-raisin-black: #2a2727ff;
+        --color-night: #131313ff;
+        --color-chamoisee: #a47649ff;
+        --color-thistle: rgb(236, 201, 225);
+        --color-offwhite: #fafafa;
+
+        --primary-bg: var(--color-raisin-black);
         --primary-bg-semi-transparent: rgba(26, 25, 25, 0.7);
+
+        --primary-fg: var(--color-antique-white);
+
+        --secondary-bg: var(--color-offwhite);
+        --secondary-fg: var(--color-night);
+        --secondary-pop: rgba(237, 95, 116, 1);
     }
 
     body {
@@ -58,7 +74,7 @@
 
     body > main {
         background: var(--primary-bg);
-        color: antiquewhite;
+        color: var(--primary-fg);
         width: 100%;
         height: 100%;
         overflow: hidden;
@@ -68,6 +84,18 @@
         box-shadow: 2px 2px 10px black;
         display: flex;
         flex-direction: column;
+        transition: filter 0.5s ease-in-out;
+    }
+
+    body > main > :is(.files-wrapper, .action-wrapper, #action-suggestions, #action-submit, #action-sibling, #action),
+    body > main > header > :is(#back, .menu, .folder-wrapper) {
+        transition: filter 0.5s ease-in-out;
+    }
+
+    body > main.inert > :is(.files-wrapper, .action-wrapper, #action-suggestions, #action-submit, #action-sibling, #action),
+    body > main.inert > header > :is(#back, .menu, .folder-wrapper) {
+
+      filter: grayscale(1) blur(4px);
     }
 
     header {
@@ -112,24 +140,43 @@
         justify-content: center;
         top: 55px;
         width: 200px;
-        height: 280px;
-        background: white;
+        background: var(--color-offwhite);
         border-radius: 10px;
         z-index: 2;
     }
 
     header .menu .content form {
-        padding: 10px;
+        width: 100%;
         margin: 10px;
-        color: black;
+        padding-top: 10px;
+        color: var(--secondary-fg);
     }
 
-    header .menu .content form > :is(input, fieldset, label) {
+    header .menu .content button {
+        appearance: none;
+        width: 100%;
+        height: 40px;
+        background: var(--secondary-bg);
+        border: 0.1px solid var(--secondary-fg);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.3s ease-in-out;
+    }
+
+    header .menu .content button:hover {
+        border-color: var(--secondary-pop);
+        color: var(--secondary-pop);
+    }
+
+    header .menu .content form > :is(input, label) {
         margin-bottom: 20px;
     }
 
     header .menu .content form fieldset {
+        display: flex;
+        justify-content: space-around;
         border: 0;
+        margin-bottom: 10px;
     }
 
     header .menu .content form fieldset input {
@@ -147,7 +194,7 @@
     header .menu .content form fieldset input:checked {
         filter: brightness(0);
         transform: scale(1.1);
-        border-color: black;
+        border-color: var(--secondary-fg);
     }
 
     header .menu .content form fieldset input:nth-child(1) {
@@ -233,7 +280,7 @@
     header.compressed button#back {
         background: transparent;
         border: 0.1px solid pink;
-        color: white;
+        color: var(--color-offwhite);
         height: 18px;
         font-size: 12px;
         top: calc(var(--window-drop-shadow-margin) + 6px)
@@ -333,7 +380,7 @@
         height: 220px;
         background: var(--primary-bg);
         bottom: 8px;
-        border-top: 1px solid white;
+        border-top: 1px solid var(--color-offwhite);
     }
 
     #action-wrapper.open ~ #action-sibling {
@@ -414,7 +461,7 @@
         left: calc(6px + var(--window-drop-shadow-margin));
         height: 32px;
         -webkit-appearance: none;
-        background: white;
+        background: var(--color-offwhite);
         border-bottom-left-radius: 4px;
         border-top-left-radius: 4px;
         border: 1px solid rgb(193, 193, 193);
@@ -428,7 +475,7 @@
         right: calc(6px + var(--window-drop-shadow-margin));
         height: 32px;
         -webkit-appearance: none;
-        background: white;
+        background: var(--color-offwhite);
         border-bottom-right-radius: 4px;
         border-top-right-radius: 4px;
         border: 1px solid rgb(193, 193, 193);
@@ -447,7 +494,7 @@
         flex-direction: column;
         margin-bottom: 10px;
         max-width: 75%;
-        background: white;
+        background: var(--color-offwhite);
         border-radius: 10px;
         margin: 0;
         margin-bottom: 10px;
@@ -506,7 +553,12 @@
         width: 100%;
         background: transparent;
         height: 2px;
-        background: black;
+        background: var(--secondary-fg);
+        transition: background 0.25s ease-in-out;
+    }
+
+    input[type=range]:hover {
+        background: var(--secondary-pop);
     }
 
     button#close-actions {
@@ -524,8 +576,464 @@
         cursor: pointer;
     }
 
+    #sign-up {
+        --sign-up-width: 350px;
+
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        left: calc(50vw - (var(--sign-up-width) / 2));
+        top: 75px;
+        width: var(--sign-up-width);
+        height: 420px;
+        z-index: 1;
+        padding: 10px;
+        background: var(--secondary-bg);
+        color: var(--secondary-fg);
+        border-radius: 5px;
+        max-height: calc(100vh - 180px);
+        overflow: auto;
+        overflow-x: hidden;
+    }
+
+    #sign-up progress {
+        display: none !important;
+        appearance: none;
+        position: absolute;
+        width: calc(100%);
+        top: 1px;
+        left: 0px;
+        right: 0px;
+        height: 3px;
+        background: var(--secondary-bg);
+    }
+
+    #sign-up progress.showing {
+        display: block !important;
+    }
+
+    #sign-up progress::-webkit-progress-bar {
+        background: var(--secondary-bg);
+    }
+
+    #sign-up progress::-webkit-progress-value {
+        background: var(--secondary-pop);
+        width: 150px;
+        height: 3px;
+        animation: progress-bar 1.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes progress-bar {
+        0% {
+            transform: translateX(0px);
+        }
+        100% {
+            transform: translateX(calc(var(--sign-up-width) - 130px));
+        }
+    }
+
+    form.stripe-lookalike {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        line-height: 1.5;
+        margin-top: 0em;
+        box-sizing: border-box;
+        border-width: 0;
+        border-style: solid;
+        border-color: #e2e8f0;
+        position: relative;
+        overflow-x: hidden;
+        height: 100%;
+    }
+
+    form button[disabled] {
+        filter: grayscale(1) opacity(0.3);
+    }
+
+    form.stripe-lookalike button:last-child {
+        position: absolute;
+        bottom: 0;
+        text-decoration: underline;
+        text-underline-offset: 20px;
+        letter-spacing: 0px;
+        transition: all 0.3s ease-in-out;
+    }
+
+
+    form.stripe-lookalike button:last-child:focus-visible,
+    form.stripe-lookalike button:last-child:hover {
+        outline: none !important;
+        text-decoration: underline;
+        text-underline-offset: 5px;
+        letter-spacing: 0.3px;
+    }
+
+    form.stripe-lookalike .stripe-lookalike-entry {
+        display: flex;
+        margin-bottom: 0.75rem;
+        margin-left: 0;
+        margin-right: 0;
+        flex-wrap: wrap;
+        width: 100%;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    form.stripe-lookalike .stripe-lookalike-entry label {
+        display: block;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--secondary-fg);
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    form.stripe-lookalike .stripe-lookalike-entry input {
+        display: block;
+        width: 100%;
+        padding: 0.75rem 0.5rem;
+        margin-bottom: 0.75rem;
+        line-height: 1.25;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+        background-color: rgba(237, 242, 247, var(--bg-opacity, 1));
+        appearance: none;
+        overflow: visible;
+        margin: 0 6px;
+    }
+
+    form.stripe-lookalike img[alt="Go back"] {
+        position: absolute;
+        height: 24px;
+        width: 24px;
+        cursor: pointer;
+        padding: 6px;
+        top: 14px;
+        left: 0;
+    }
+
+    form.stripe-lookalike img[alt="Close"] {
+        position: absolute;
+        height: 24px;
+        width: 24px;
+        cursor: pointer;
+        padding: 6px;
+        right: 0;
+        top: 14px;
+    }
+
+    form.stripe-lookalike h1 {
+        -webkit-text-size-adjust: 100%;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        box-sizing: border-box;
+        border-width: 0;
+        border-style: solid;
+        border-color: #e2e8f0;
+        font-weight: 700;
+        font-size: 1.5rem;
+        margin-top: 1rem;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        --text-opacity: 1;
+        color: rgba(237, 95, 116, var(--text-opacity));
+    }
+
+    form.stripe-lookalike button {
+        -webkit-text-size-adjust: 100%;
+        -webkit-font-smoothing: antialiased;
+        box-sizing: border-box;
+        border-width: 0;
+        border-style: solid;
+        border-color: #e2e8f0;
+        font-family: inherit;
+        font-size: 100%;
+        margin: 0;
+        overflow: visible;
+        text-transform: none;
+        background-image: none;
+        cursor: pointer;
+        line-height: inherit;
+        -webkit-appearance: none;
+        appearance: none;
+        --bg-opacity: 1;
+        background-color: rgba(237, 95, 116, var(--bg-opacity));
+        border-radius: 0.375rem;
+        font-weight: 300;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        --text-opacity: 1;
+        color: rgba(255, 255, 255, var(--text-opacity));
+        width: 100%;
+    }
+
+    form#sign-up-tos label {
+        display: flex;
+        align-items: center;
+        margin-left: 10px;
+        margin-bottom: 10px;
+    }
+
+    form#sign-up-tos input {
+        width: 24px;
+        height: 24px;
+        margin-right: 10px;
+    }
+
+    form#sign-up-tos .sign-up-select-type {
+        display: flex;
+    }
+
+    form#sign-up-tos .sign-up-select-type > div {
+        border: 1px solid var(--primary-bg-semi-transparent);
+        border-radius: 4px;
+        margin: 6px;
+        flex: 1;
+        cursor: pointer;
+        transition: border 0.3s ease-in-out;
+    }
+
+    form#sign-up-tos .sign-up-select-type > div.selected {
+        border: 1px solid var(--secondary-pop);
+    }
+
+    form#sign-up-tos .sign-up-select-type > div > :is(h2, p) {
+        text-align: center;
+    }
+
+    form#sign-up-tos .sign-up-select-type > div > h2 {
+        transition: color 0.2s ease-in-out;
+        margin-top: 0.75rem;
+        margin-bottom: 0;
+    }
+
+    form#sign-up-tos .sign-up-select-type > div.selected > h2 {
+        color: var(--secondary-pop);
+    }
+
+    form#sign-up-tos .sign-up-select-type > div > p {
+        margin: 0.5rem;
+        line-height: 1.5;
+    }
+
+    iframe#stripe-payment {
+        border: none;
+        height: 100%;
+        width: 100%;
+        background: var(--secondary-bg);
+    }
+
+    #account-information-aerome {
+        overflow: hidden;
+    }
+
+    #account-information-aerome .unsubscribe {
+        visibility: visible;
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+    }
+
+    #account-information-aerome .unsubscribe[inert] {
+        visibility: hidden;
+    }
+
+    #account-information-aerome .unsubscribe > p {
+        position: relative;
+        bottom: 50px;
+        transition: bottom 0.3s ease-in-out;
+    }
+
+    #account-information-aerome .unsubscribe[inert] > p {
+        bottom: -50px;
+    }
+
+    #account-information-aerome .unsubscribe > button {
+        position: absolute;
+        left: 0;
+        width: 48%;
+        background: var(--secondary-bg);
+        color: var(--secondary-pop);
+        border: 0.3px solid var(--secondary-pop);
+        transition: width 0.3s ease-in-out;
+    }
+
+    #account-information-aerome .unsubscribe[inert] > button {
+        width: 100%;
+    }
+
+    #account-information-aerome .unsubscribe ~ button {
+        transition: width 0.3s ease-in-out;
+        right: 0;
+    }
+
+    #account-information-aerome .unsubscribe:not([inert]) ~ button {
+        width: 48%;
+    }
 </style>
 <body>
+    <div id="sign-up" style="display: none">
+        <!--
+ aria-busy="true" aria-describedby="progress-bar"
+        -->
+        <form class="stripe-lookalike" id="sign-up-tos">
+            <h1>Welcome</h1>
+
+            <p>Please read and agree to the <a href="https://aerome.net/tos.html" target="_blank">Terms of Service</a> and our <a href="privacy_policy.html" onclick="event.preventDefault(), window.open(event.target.href)">Privacy Policy</a> before continuing.</p>
+
+            <label>
+                <input type="checkbox" id="sign-up-tos-confirmation" required>
+                I agree to the Terms of Service
+            </label>
+
+            <label>
+                <input type="checkbox" id="sign-up-pp-confirmation" required>
+                I have read the Privacy Policy
+            </label>
+
+            <div class="sign-up-select-type">
+                <div class="sign-up-select-item" id="sign-up-select-byok">
+                    <h2>Open AI Key</h2>
+                    <p>Use a <br/> OpenAI <br /> key</p>
+                </div>
+
+                <div class="sign-up-select-item" id="sign-up-select-aerome-key">
+                    <h2>Sign Up</h2>
+                    <p>Get an Aerome account</p>
+                </div>
+
+                <div class="sign-up-select-item" id="sign-up-select-sign-in">
+                    <h2>Sign In</h2>
+                    <p>Existing Aerome account</p>
+                </div>
+            </div>
+
+            <button type="submit">Continue</button>
+        </form>
+
+        <form class="stripe-lookalike" id="sign-up-byok" style="display: none;">
+            <img
+                src="icon://go-previous-symbolic?size=32"
+                alt="Go back" />
+
+            <h1>Use Open AI Directly</h1>
+
+            <p>This option allows for you to use an Open AI key directly. If you use this option, your key is never sent to Aerome's servers.</p>
+
+            <div class="stripe-lookalike-entry">
+                <label for="sign-up-open-ai-key"> Key </label>
+                <input name="key" id="sign-up-open-ai-key" />
+            </div>
+
+            <button type="submit">Save</button>
+        </form>
+
+        <form class="stripe-lookalike" id="sign-up-aerome" style="display: none;" aria-describedby="sign-up-progress-bar">
+            <img
+                src="icon://go-previous-symbolic?size=32"
+                alt="Go back" />
+
+            <h1>Create Account</h1>
+
+            <div class="stripe-lookalike-entry">
+                <label for="sign-up-email"> Email </label>
+                <input type="email" name="email" id="sign-up-email" />
+            </div>
+
+            <div class="stripe-lookalike-entry">
+                <label> Password: </label>
+                <input type="password" name="password" />
+            </div>
+
+            <div class="stripe-lookalike-entry">
+                <label> Confirm Password: </label>
+                <input type="password" name="confirm_password" />
+            </div>
+
+            <button type="submit">Create Account</button>
+        </form>
+
+        <form class="stripe-lookalike" id="sign-in-aerome" style="display: none;" aria-describedby="sign-up-progress-bar">
+            <img
+                src="icon://go-previous-symbolic?size=32"
+                alt="Go back" />
+
+            <h1>Log In</h1>
+
+            <div class="stripe-lookalike-entry">
+                <label for="sign-up-email"> Email </label>
+                <input type="email" name="email" id="sign-up-email" />
+            </div>
+
+            <div class="stripe-lookalike-entry">
+                <label> Password: </label>
+                <input type="password" name="password" />
+            </div>
+
+            <button type="submit">Sign Into Account</button>
+        </form>
+
+        <form class="stripe-lookalike" id="account-information-direct" style="display: none;" aria-describedby="sign-up-progress-bar">
+            <img
+                src="icon://window-close-symbolic?size=32"
+                alt="Close" />
+
+            <h1>Account</h1>
+            <p>Your account is configured to use OpenAI directly. Aerome never see's any of your requests, and all billing is handled through Open AI.</p>
+
+            <div class="stripe-lookalike-entry">
+                <label for="account-information-direct-key"> Key </label>
+                <input name="key" id="account-information-direct-key" />
+            </div>
+
+            <button>Log Out</button>
+        </form>
+
+        <form class="stripe-lookalike" id="account-information-aerome" style="display: none;" aria-describedby="sign-up-progress-bar">
+            <img
+                src="icon://window-close-symbolic?size=32"
+                alt="Close" />
+
+            <h1>Account</h1>
+
+            <template>
+                <p>Your last payment for $PRICE was on $LAST_PAYMENT_DATE</p>
+
+                <div class="payment-current">
+                    <p>Your next payment is due on $NEXT_PAYMENT_DATE</p>
+                    <p>You can <a href="#unsubscribe" target="_blank">unsubscribe anytime</a></p>
+                </div>
+
+                <p class="payment-late">
+                    You are currently overdue for a payment. You can
+                    <a href="#update-payment-details" target="_blank">update your payment details here.</a> 
+                </p>
+            </template>
+
+            <div class="account-information">
+            </div>
+
+            <div class="unsubscribe" aria-hidden=true inert=true>
+                <p>
+                    Are you sure you want to unsubscribe?
+                </p>
+                <button>No</button>
+            </div>
+
+            <button>Log Out</button>
+        </form>
+
+        <iframe id="stripe-payment" style="display: none;"></iframe>
+
+        <progress id="sign-up-progress-bar" aria-label="Content loading…"></progress>
+    </div>
+
     <main>
         <header id="header">
             <div></div>
@@ -537,12 +1045,12 @@
                     <form>
                         <h2>Scale</h2>
                         <input class="grid-scale" type="range" min=0 max=1 value=0.25 step=0.01
-                            oninput="future.settings.gridScale = this.value" />
+                            oninput="future.options.gridScale = this.value" />
 
                         <h2>Sort</h2>
 
                         <fieldset id="sort"
-                            onchange="future.settings.sort = this.querySelector(':checked').value">
+                            onchange="future.options.sort = this.querySelector(':checked').value">
                             <input type="radio" name="sort" value="a-z" />
                             <input type="radio" name="sort" value="z-a" />
                             <input type="radio" name="sort" value="date" />
@@ -550,15 +1058,19 @@
 
                         <label>
                             <input id="sort_folders_first" type="checkbox" name="folders_first"
-                                onchange="future.settings.sortFoldersFirst = this.checked" />
+                                onchange="future.options.sortFoldersFirst = this.checked" />
                             Folders first
                         </label>
 
                         <label>
                             <input id="sort_show_hidden" type="checkbox" name="show_hidden"
-                                onchange="future.settings.sortShowHidden = this.checked" />
+                                onchange="future.options.sortShowHidden = this.checked" />
                             Show hidden
                         </label>
+
+                        <button id="show-account-information">
+                            Account
+                        </button>
                     </form>
                 </div>
 
@@ -616,8 +1128,13 @@
     </main>
 
     <script>
+        const ACCOUNTS_SERVER = new URL('http://localhost:9008');
+
         window.future = {
             settings: {
+                account: null
+            },
+            options: {
                 get sort() {
                     return localStorage.sort?.toLowerCase() ?? 'a-z';
                 },
@@ -673,7 +1190,7 @@
         };
 
         document.getElementById('back').addEventListener('click', e => {
-            rpc.invoke({ cmd: 'back', options: future.settings });
+            rpc.invoke({ cmd: 'back', options: future.options });
         });
 
         document.getElementById('action').addEventListener('keypress', e => {
@@ -690,7 +1207,7 @@
         document.getElementById('files').addEventListener('click', e => {
             const li = e.target.closest('li');
             if (!li) return;
-            rpc.invoke({ cmd: 'forward', to: li.textContent, options: future.settings });
+            rpc.invoke({ cmd: 'forward', to: li.textContent, options: future.options });
         });
 
         document.getElementById('actions').addEventListener('click', e => {
@@ -763,6 +1280,7 @@
             }
         };
 
+
         window.updateThumbnail = ({ name, url }) => {
             const li = document.getElementById(`file-${encodeFilenameToId(name)}`);
             if (li) {
@@ -798,6 +1316,13 @@
             }
         };
 
+        window.setSettings = settings => {
+            future.settings = settings;
+            if (!settings.account) {
+                showSignUp();
+            }
+        };
+
         window.addConversationItem = (from, message, codeblock) => {
             const conversation = document.getElementById('conversation');
 
@@ -826,7 +1351,7 @@
                 const code = document.createElement('code');
                 const evaluateButton = document.createElement('button');
                 const evaluateCode = () => {
-                    rpc.invoke({ cmd: 'evaluate', script: codeblock, options: future.settings });
+                    rpc.invoke({ cmd: 'evaluate', script: codeblock, options: future.options });
                 };
 
                 code.append(pre);
@@ -921,7 +1446,7 @@
         document.getElementById('folder').addEventListener('keypress', e => {
             if (e.key !== 'Enter') return;
             e.preventDefault();
-            rpc.invoke({ cmd: 'jump', to: e.target.textContent, options: future.settings });
+            rpc.invoke({ cmd: 'jump', to: e.target.textContent, options: future.options });
         });
 
         document.getElementById('close-actions').addEventListener('click', e => {
@@ -939,7 +1464,7 @@
                 }
                 case 'ArrowLeft': {
                     if (event.altKey) {
-                        rpc.invoke({ cmd: 'back', options: future.settings });
+                        rpc.invoke({ cmd: 'back', options: future.options });
                     }
                     break;
                 }
@@ -951,7 +1476,11 @@
                     break;
                 }
                 default: {
-                    if (!e.target.closest('input#action') && !e.target.closest('h1#folder')) {
+                    const hasFocusableElementParent =
+                        e.target.closest('input') ||
+                        e.target.closest('h1#folder');
+
+                    if (!hasFocusableElementParent) {
                         const action = document.getElementById('action');
                         action.focus();
                     }
@@ -976,6 +1505,493 @@
             rpc.invoke({ cmd: 'window', window: 'close' });
         });
 
+        document.querySelector('#sign-up .sign-up-select-type').addEventListener('click', e => {
+            const item = e.target.closest('.sign-up-select-item');
+            if (!item) return;
+
+            for (const child of e.currentTarget.children) {
+                child.classList.remove('selected');
+            }
+
+            item.classList.add('selected');
+        });
+
+        document.getElementById('sign-up').addEventListener('click', e => {
+            maybeNavigateBack(e);
+            maybeClose(e);
+        });
+
+        function maybeClose(e) {
+            const close = e.target.closest('img[alt="Close"]');
+            if (!close) return;
+            closeSignUpForms();
+        }
+
+        function closeSignUpForms() {
+            const signUpFormsEl = document.getElementById('sign-up');
+
+            for (const child of signUpFormsEl.children) {
+                child.style.display = 'none';
+            }
+
+            signUpFormsEl.style.display = 'none';
+        }
+
+        function maybeNavigateBack(e) {
+            const back = e.target.closest('img[alt="Go back"]');
+            if (!back) return;
+
+            let previousPageId;
+            switch (back.parentElement.id) {
+                case 'sign-up-byok':
+                case 'sign-in-aerome':
+                case 'sign-up-aerome': previousPageId = 'sign-up-tos'; break;
+            }
+            if (!previousPageId) return;
+
+            hideSLForm(back.parentElement);
+            showSLForm(document.getElementById(previousPageId));
+        }
+
+        document.getElementById('sign-up-tos').addEventListener('submit', e => {
+            e.preventDefault();
+
+            if (!e.target.checkValidity()) {
+                e.target.reportValidity();
+                return;
+            }
+
+            hideSLForm(e.target);
+
+            const showing = e.currentTarget.querySelector('.sign-up-select-type > .selected')?.id;
+            switch (showing) {
+                case 'sign-up-select-byok': {
+                    showSLForm(document.getElementById('sign-up-byok'));
+                    break;
+                }
+
+                case 'sign-up-select-sign-in': {
+                    showSLForm(document.getElementById('sign-in-aerome'));
+                    break;
+                }
+
+                default:
+                case 'sign-up-select-aerome-key': {
+                    showSLForm(document.getElementById('sign-up-aerome'));
+                    break;
+                }
+            }
+        });
+
+        document.getElementById('sign-up-byok').addEventListener('submit', e => {
+            e.preventDefault();
+
+            const key = e.target.querySelector('#sign-up-open-ai-key').value;
+            rpc.invoke({ cmd: 'settings', settings: { account: { direct: key } } });
+            hideSignUp();
+        });
+
+        document.getElementById('sign-in-aerome').addEventListener('submit', async e => {
+            e.preventDefault();
+            showProgressBar(e.target);
+
+            const formData = new FormData(e.target);
+            try {
+                const url = new URL('/auth/login', ACCOUNTS_SERVER);
+                const params = new URLSearchParams(formData);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: params
+                });
+
+                const aerome = await response.json();
+                rpc.invoke({ cmd: 'settings', settings: { account: { aerome } } });
+
+                if (response.ok) {
+                    hideSignUp();
+                } else {
+                    console.error(await response.text());
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            hideProgressBar(e.target);
+        });
+
+        document.getElementById('sign-up-aerome').addEventListener('change', e => {
+            const passwordEl = e.currentTarget.querySelector('input[type="password"][name="password"]');
+            const passwordConfirmEl = e.currentTarget.querySelector('input[type="password"][name="confirm_password"]');
+
+            if (passwordEl.value !== passwordConfirmEl.value) {
+                passwordEl.setCustomValidity('Passwords do not match');
+                    console.error('Passwords do not match');
+            } else {
+                passwordEl.setCustomValidity('');
+                    console.log('Passwords match');
+            }
+        });
+
+        function showProgressBar(affected) {
+            const progressBar = document.getElementById('sign-up-progress-bar');
+
+            progressBar.classList.add('showing');
+            progressBar.removeAttribute('aria-hidden');
+            affected.setAttribute('aria-busy', true);
+        }
+
+        function hideProgressBar(affected) {
+            const progressBar = document.getElementById('sign-up-progress-bar');
+
+            progressBar.classList.remove('showing');
+            progressBar.setAttribute('aria-hidden', true);
+            affected.removeAttribute('aria-busy');
+        }
+
+        document.getElementById('sign-up-aerome').addEventListener('submit', async e => {
+            e.preventDefault();
+
+            if (!e.target.checkValidity()) {
+                e.target.reportValidity();
+                return;
+            }
+
+            showProgressBar(e.target);
+
+            const formData = new FormData(e.target);
+            try {
+                const url = new URL('/auth/signup', ACCOUNTS_SERVER);
+                const params = new URLSearchParams(formData);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: params
+                });
+
+                if (response.ok) {
+                    const { key, email } = await response.json();
+                    const paymentFrame = document.getElementById('stripe-payment');
+                    paymentFrame.onload = () => {
+                        hideSLForm(e.target);
+                        showSLForm(paymentFrame);
+                    };
+                    const url = new URL(ACCOUNTS_SERVER);
+                    url.search = new URLSearchParams([ [ 'key', key ], [ 'email', email ] ]);
+                    paymentFrame.src = url;
+                    const aerome = {
+                        active: false,
+                        email,
+                        key
+                    };
+                    rpc.invoke({ cmd: 'settings', settings: { account: { aerome } } });
+                } else {
+                    const err = await response.json();
+                    switch (err.type) {
+                        case 'invalid_pass': {
+                            e.target.querySelector('input[type="password"]').setCustomValidity(err.message);
+                            break;
+                        }
+                        case 'invalid_email': {
+                            e.target.querySelector('input[type="email"]').setCustomValidity(err.message);
+                            break;
+                        }
+                    }
+                    e.target.reportValidity();
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            hideProgressBar(e.target);
+        });
+
+        window.addEventListener('message', event => {
+            if (!('' + ACCOUNTS_SERVER).startsWith(event.origin)) return;
+
+            switch (event.data) {
+                case 'success': {
+                    hideSignUp();
+                    const aerome = {
+                        ...future.settings.account.aerome,
+                        active: true
+                    };
+                    rpc.invoke({ cmd: 'settings', settings: { account: { aerome } } });
+                    break;
+                }
+                case 'close': {
+                    closeSignUpForms();
+                    break;
+                }
+            }
+        }, false);
+
+        async function showAeromeAccountInformation({ email, key }) {
+            const signUpFormsEl = document.getElementById('sign-up');
+            const aeromeAccountInformationEl = document.getElementById('account-information-aerome');
+
+            for (const child of signUpFormsEl.children) {
+                child.style.display = 'none';
+            }
+
+            aeromeAccountInformationEl.style.display = 'block';
+            showSLForm(aeromeAccountInformationEl);
+            showProgressBar(aeromeAccountInformationEl);
+
+            const response = await (async function () {
+                try {
+                    return await fetch(new URL('/payment/subscription', ACCOUNTS_SERVER), {
+                        headers: {
+                            'aerome-email': email,
+                            'aerome-key': key
+                        }
+                    });
+                } catch (e) {
+                    return { ok: false };
+                }
+            })();
+
+            const transitionToPayment = () => {
+                hideSLForm(aeromeAccountInformationEl);
+                const paymentFrame = document.getElementById('stripe-payment');
+                const url = new URL(ACCOUNTS_SERVER);
+                url.search = new URLSearchParams([ [ 'key', key ], [ 'email', email ] ]);
+                paymentFrame.src = url;
+                showSLForm(paymentFrame);
+            };
+
+            const createUnsubscribedElement = () => {
+                const el = document.createElement('p');
+                el.innerHTML =
+                    'You are currently unsubscribed. To resubscribe update your ' +
+                    '<a href="#update-payment-details">billing details</a>';
+                el.querySelector('a[href="#update-payment-details"]').addEventListener('click', e => {
+                    e.preventDefault();
+                    transitionToPayment();
+                });
+                return el;
+            }
+
+            if (!response.ok) {
+                aeromeAccountInformationEl.querySelector('.account-information').innerHTML =
+                    'Error retrieving account information.';
+            } else {
+                const { allowance, paymentActive, paymentCurrent, paymentDate, price } = await response.json();
+                let accountInfoEl = aeromeAccountInformationEl.querySelector('template')
+                    .content.cloneNode(true);
+                let lastPaymentEl = accountInfoEl.querySelector('p');
+
+                if (!paymentActive) {
+                    accountInfoEl = createUnsubscribedElement();
+                } else if (paymentDate === null) {
+                    lastPaymentEl.remove();
+                } else {
+                    const priceString = '' + price;
+                    const dollarAmount = priceString.substr(0, priceString.length - 2);
+                    const centsAmount = priceString.substr(priceString.length - 2, 2);
+                    const formattedPrice = `$${dollarAmount}.${centsAmount}`;
+
+                    const date = new Date(paymentDate);
+
+                    lastPaymentEl.textContent = lastPaymentEl.textContent
+                        .replace('$PRICE', formattedPrice)
+                        .replace('$LAST_PAYMENT_DATE', date.toLocaleDateString())
+
+                    if (paymentCurrent) {
+                        accountInfoEl.querySelector('.payment-late').style.display = 'none';
+                        accountInfoEl.querySelector('.payment-late').setAttribute('aria-hidden', true);
+                        let nextPaymentDate = new Date(paymentDate);
+                        nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+                        let nextPaymentEl = accountInfoEl.querySelector('.payment-current > p');
+                        nextPaymentEl.textContent = nextPaymentEl.textContent
+                            .replace('$NEXT_PAYMENT_DATE', nextPaymentDate.toLocaleDateString());
+                    } else {
+                        accountInfoEl.querySelector('.payment-current').style.display = 'none';
+                        accountInfoEl.querySelector('.payment-current').setAttribute('aria-hidden', true);
+                    }
+
+                    accountInfoEl.querySelector('a[href="#update-payment-details"]').addEventListener('click', e => {
+                        e.preventDefault();
+                        transitionToPayment();
+                    });
+
+                    accountInfoEl.querySelector('a[href="#unsubscribe"]').addEventListener('click', e => {
+                        e.preventDefault();
+
+                        const form = e.target.closest('form');
+                        const unsub = form.querySelector('.unsubscribe');
+                        const primaryButton = form.querySelector('form > button:last-child');
+                        const unsubscribe = async e => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            showProgressBar(aeromeAccountInformationEl);
+
+                            for (const button of form.querySelectorAll('button')) {
+                                button.disabled = true;
+                            }
+
+                            try {
+                                const response = await fetch(new URL('/payment/subscription', ACCOUNTS_SERVER), {
+                                    method: 'DELETE',
+                                    headers: {
+                                        'aerome-email': email,
+                                        'aerome-key': key
+                                    }
+                                });
+
+                                hideProgressBar(aeromeAccountInformationEl);
+
+                                if (!response.ok) {
+                                    throw new Error();
+                                }
+
+                                for (const button of form.querySelectorAll('button')) {
+                                    button.disabled = false;
+                                }
+                                primaryButton.removeEventListener('click', unsubscribe);
+                                unsub.setAttribute('inert', true);
+                                unsub.setAttribute('aria-hidden', true);
+                                primaryButton.textContent = 'Log Out';
+
+                                const accountInformation = aeromeAccountInformationEl
+                                    .querySelector('.account-information');
+                                accountInformation.innerHTML = '';
+                                accountInformation.append(createUnsubscribedElement());
+
+                            } catch (e) {
+                                form.querySelector('.unsubscribe > p').innerHTML =
+                                    'We encountered an error while unsubscribing your account. Please contact support '  +
+                                    'at <a href="mailto:support@aerome.net">support@aerome.net</a>';
+                            }
+                        };
+                        primaryButton.textContent = 'Yes';
+
+                        primaryButton.addEventListener('click', unsubscribe);
+                        unsub.removeAttribute('inert');
+                        unsub.removeAttribute('aria-hidden');
+                        unsub.querySelector('button').addEventListener('click', e => {
+                            e.preventDefault();
+                            unsub.setAttribute('inert', true);
+                            unsub.setAttribute('aria-hidden', true);
+                            primaryButton.textContent = 'Log Out';
+                            primaryButton.removeEventListener('click', unsubscribe);
+                        }, {
+                            once: true
+                        });
+                    });
+                }
+
+                aeromeAccountInformationEl.querySelector('.account-information').innerHTML = '';
+                aeromeAccountInformationEl.querySelector('.account-information').append(accountInfoEl);
+            }
+            hideProgressBar(aeromeAccountInformationEl);
+            signUpFormsEl.style.display = 'block';
+        }
+
+        function showDirectAccountInformation() {
+            const signUpFormsEl = document.getElementById('sign-up');
+            const directAccountInformationEl = document.getElementById('account-information-direct');
+
+            for (const child of signUpFormsEl.children) {
+                child.style.display = 'none';
+            }
+            signUpFormsEl.style.display = 'block';
+            showSLForm(directAccountInformationEl);
+            directAccountInformationEl.style.display = 'block';
+            directAccountInformationEl.querySelector('#account-information-direct-key').value =
+                future.settings.account.direct;
+        }
+
+        document.getElementById('account-information-direct-key').addEventListener('input', e => {
+            e.preventDefault();
+            const direct = e.target.value;
+            rpc.invoke({ cmd: 'settings', settings: { account: { direct } } });
+        });
+
+        document.getElementById('show-account-information').addEventListener('click', e => {
+            e.preventDefault();
+            document.getElementById('header')
+                .querySelector('.menu > .content')
+                .classList.remove('showing');
+
+            const { aerome, direct } = future.settings.account;
+            if (aerome) {
+                showAeromeAccountInformation(aerome);
+            } else {
+                showDirectAccountInformation(direct);
+            }
+        });
+
+        document.getElementById('account-information-direct').addEventListener('submit', logOut);
+        document.getElementById('account-information-aerome').addEventListener('submit', logOut);
+
+        function logOut(e) {
+            e.preventDefault?.();
+            rpc.invoke({ cmd: 'settings', settings: { account: null } });
+            hideSLForm(e.target);
+            showSLForm(document.getElementById('sign-up-tos'));
+        }
+
+        async function showSignUp(inertBackground = true) {
+            document.getElementById('sign-up').style.display = 'block';
+
+            if (inertBackground) {
+                document.querySelector('main').classList.add('inert');
+                document.querySelector('header .folder-wrapper #folder').setAttribute('inert', true);
+                for (const child of document.getElementById('header').children) {
+                    if (!child.matches('.folder-wrapper') && !child.matches('.controls')) {
+                        child.setAttribute('inert', true);
+                    }
+                }
+
+                for (const child of document.querySelector('main').children) {
+                    if (!child.matches('header')) {
+                        child.setAttribute('inert', true);
+                    }
+                }
+            }
+        }
+
+        async function hideSignUp() {
+            document.getElementById('sign-up').style.display = 'none';
+            document.querySelector('main').classList.remove('inert');
+            document.querySelector('header .folder-wrapper #folder').removeAttribute('inert');
+
+            for (const child of document.getElementById('header').children) {
+                if (!child.matches('.folder-wrapper') && !child.matches('.controls')) {
+                    child.removeAttribute('inert');
+                }
+            }
+
+            for (const child of document.querySelector('main').children) {
+                if (!child.matches('header')) {
+                    child.removeAttribute('inert');
+                }
+            }
+        }
+
+        async function hideSLForm(el) {
+            const anim = el.animate([ { opacity: 1 }, { opacity: 0 }], {
+                duration: 200,
+                fill: 'forwards',
+                easing: 'ease-out'
+            });
+
+            await anim.finished;
+            el.style.display = 'none';
+        }
+
+        async function showSLForm(el) {
+            const anim = el.animate([ { opacity: 0 }, { opacity: 1 }], {
+                duration: 200,
+                fill: 'forwards',
+                easing: 'ease-in'
+            });
+
+            el.style.display = 'block';
+            await anim.finished;
+        }
+
         const debounce = (delay, cb) => {
             let id;
             return (...args) => {
@@ -988,14 +2004,14 @@
         };
 
         const notifyOptionsUpdate = debounce(250, () => {
-            rpc.invoke({ cmd: 'options', options: future.settings });
+            rpc.invoke({ cmd: 'options', options: future.options });
         });
 
         function encodeFilenameToId(name) {
             return MD5(unescape(encodeURIComponent(name)));
         }
 
-        Object.assign(future.settings, future.settings);
+        Object.assign(future.options, future.options);
         function MD5(d){var r = M(V(Y(X(d),8*d.length)));return r.toLowerCase()};function M(d){for(var _,m="0123456789ABCDEF",f="",r=0;r<d.length;r++)_=d.charCodeAt(r),f+=m.charAt(_>>>4&15)+m.charAt(15&_);return f}function X(d){for(var _=Array(d.length>>2),m=0;m<_.length;m++)_[m]=0;for(m=0;m<8*d.length;m+=8)_[m>>5]|=(255&d.charCodeAt(m/8))<<m%32;return _}function V(d){for(var _="",m=0;m<32*d.length;m+=8)_+=String.fromCharCode(d[m>>5]>>>m%32&255);return _}function Y(d,_){d[_>>5]|=128<<_%32,d[14+(_+64>>>9<<4)]=_;for(var m=1732584193,f=-271733879,r=-1732584194,i=271733878,n=0;n<d.length;n+=16){var h=m,t=f,g=r,e=i;f=md5_ii(f=md5_ii(f=md5_ii(f=md5_ii(f=md5_hh(f=md5_hh(f=md5_hh(f=md5_hh(f=md5_gg(f=md5_gg(f=md5_gg(f=md5_gg(f=md5_ff(f=md5_ff(f=md5_ff(f=md5_ff(f,r=md5_ff(r,i=md5_ff(i,m=md5_ff(m,f,r,i,d[n+0],7,-680876936),f,r,d[n+1],12,-389564586),m,f,d[n+2],17,606105819),i,m,d[n+3],22,-1044525330),r=md5_ff(r,i=md5_ff(i,m=md5_ff(m,f,r,i,d[n+4],7,-176418897),f,r,d[n+5],12,1200080426),m,f,d[n+6],17,-1473231341),i,m,d[n+7],22,-45705983),r=md5_ff(r,i=md5_ff(i,m=md5_ff(m,f,r,i,d[n+8],7,1770035416),f,r,d[n+9],12,-1958414417),m,f,d[n+10],17,-42063),i,m,d[n+11],22,-1990404162),r=md5_ff(r,i=md5_ff(i,m=md5_ff(m,f,r,i,d[n+12],7,1804603682),f,r,d[n+13],12,-40341101),m,f,d[n+14],17,-1502002290),i,m,d[n+15],22,1236535329),r=md5_gg(r,i=md5_gg(i,m=md5_gg(m,f,r,i,d[n+1],5,-165796510),f,r,d[n+6],9,-1069501632),m,f,d[n+11],14,643717713),i,m,d[n+0],20,-373897302),r=md5_gg(r,i=md5_gg(i,m=md5_gg(m,f,r,i,d[n+5],5,-701558691),f,r,d[n+10],9,38016083),m,f,d[n+15],14,-660478335),i,m,d[n+4],20,-405537848),r=md5_gg(r,i=md5_gg(i,m=md5_gg(m,f,r,i,d[n+9],5,568446438),f,r,d[n+14],9,-1019803690),m,f,d[n+3],14,-187363961),i,m,d[n+8],20,1163531501),r=md5_gg(r,i=md5_gg(i,m=md5_gg(m,f,r,i,d[n+13],5,-1444681467),f,r,d[n+2],9,-51403784),m,f,d[n+7],14,1735328473),i,m,d[n+12],20,-1926607734),r=md5_hh(r,i=md5_hh(i,m=md5_hh(m,f,r,i,d[n+5],4,-378558),f,r,d[n+8],11,-2022574463),m,f,d[n+11],16,1839030562),i,m,d[n+14],23,-35309556),r=md5_hh(r,i=md5_hh(i,m=md5_hh(m,f,r,i,d[n+1],4,-1530992060),f,r,d[n+4],11,1272893353),m,f,d[n+7],16,-155497632),i,m,d[n+10],23,-1094730640),r=md5_hh(r,i=md5_hh(i,m=md5_hh(m,f,r,i,d[n+13],4,681279174),f,r,d[n+0],11,-358537222),m,f,d[n+3],16,-722521979),i,m,d[n+6],23,76029189),r=md5_hh(r,i=md5_hh(i,m=md5_hh(m,f,r,i,d[n+9],4,-640364487),f,r,d[n+12],11,-421815835),m,f,d[n+15],16,530742520),i,m,d[n+2],23,-995338651),r=md5_ii(r,i=md5_ii(i,m=md5_ii(m,f,r,i,d[n+0],6,-198630844),f,r,d[n+7],10,1126891415),m,f,d[n+14],15,-1416354905),i,m,d[n+5],21,-57434055),r=md5_ii(r,i=md5_ii(i,m=md5_ii(m,f,r,i,d[n+12],6,1700485571),f,r,d[n+3],10,-1894986606),m,f,d[n+10],15,-1051523),i,m,d[n+1],21,-2054922799),r=md5_ii(r,i=md5_ii(i,m=md5_ii(m,f,r,i,d[n+8],6,1873313359),f,r,d[n+15],10,-30611744),m,f,d[n+6],15,-1560198380),i,m,d[n+13],21,1309151649),r=md5_ii(r,i=md5_ii(i,m=md5_ii(m,f,r,i,d[n+4],6,-145523070),f,r,d[n+11],10,-1120210379),m,f,d[n+2],15,718787259),i,m,d[n+9],21,-343485551),m=safe_add(m,h),f=safe_add(f,t),r=safe_add(r,g),i=safe_add(i,e)}return Array(m,f,r,i)}function md5_cmn(d,_,m,f,r,i){return safe_add(bit_rol(safe_add(safe_add(_,d),safe_add(f,i)),r),m)}function md5_ff(d,_,m,f,r,i,n){return md5_cmn(_&m|~_&f,d,_,r,i,n)}function md5_gg(d,_,m,f,r,i,n){return md5_cmn(_&f|m&~f,d,_,r,i,n)}function md5_hh(d,_,m,f,r,i,n){return md5_cmn(_^m^f,d,_,r,i,n)}function md5_ii(d,_,m,f,r,i,n){return md5_cmn(m^(_|~f),d,_,r,i,n)}function safe_add(d,_){var m=(65535&d)+(65535&_);return(d>>16)+(_>>16)+(m>>16)<<16|65535&m}function bit_rol(d,_){return d<<_|d>>>32-_}
     </script>
 </body>

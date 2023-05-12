@@ -7,6 +7,7 @@ description = "A file manager from the future"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+cozo = "0.6.0"
 chrono = "0.4.24"
 derive_more = "0.99.17"
 dirs = "5.0.0"
@@ -21,6 +22,9 @@ tokio = { version = "1.27.0", features = ["process", "rt", "full"] }
 url = { version = "2.3.1", features = ["serde"] }
 wry = { version = "0.27.3", features = ["transparent"] }
 xdg-mime = "0.3.3"
+
+[dev-dependencies]
+serial_test = "2.0.0"
 
 [package.metadata.bundle]
 identifier = "com.prlang.future"

@@ -20,13 +20,15 @@ mod models;
 mod icons;
 mod thumbnails;
 mod prompts;
+mod store;
 
 use ipc::*;
-use models::{Suggestions,Folder,FolderListing,FileMetadata,FolderListingType,Options,Sort};
+use models::{Account,AccountDirect,AccountAerome,Suggestions,Folder,FolderListing,FileMetadata,FolderListingType,Options,Sort,Settings};
 use icons::Icons;
 use tokio::{runtime::{Runtime},process::Command};
 use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
 use tokio::task::AbortHandle;
+use std::borrow::Cow;
 use std::fs;
 use std::path::{PathBuf,Path};
 use std::process::Stdio;
@@ -42,17 +44,24 @@ use wry::{
         event_loop::{ControlFlow,EventLoop,EventLoopProxy},
         window::{WindowBuilder,Window},
     },
-    http::{header::CONTENT_TYPE,Response},
+    http::{
+        header::CONTENT_TYPE,
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        Response,
+        StatusCode
+    },
     webview::WebViewBuilder
 };
 use url::Url;
 use serde_json::json;
 use thumbnails::{ThumbnailSize,Thumbnails};
 use xdg_mime::{SharedMimeInfo, Guess};
+use store::Store;
 
 fn main() -> wry::Result<()> {
     constants::install();
 
+    let store = Store::new();
     let icons = Mutex::new(Icons::new());
     let mime_db = SharedMimeInfo::new();
     let event_loop = EventLoop::<UserEvent>::with_user_event();
@@ -75,6 +84,9 @@ fn main() -> wry::Result<()> {
 
                 handler_thumbnails.generate(&path);
                 window.set_visible(true);
+                proxy.send_event(UserEvent::UpdateSettings {
+                    settings: store.get_settings()
+                });
             },
             Cmd::Back { options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
@@ -153,7 +165,11 @@ fn main() -> wry::Result<()> {
             },
             Cmd::Communicate { message } => {
                 let unlocked = handler_folder.lock().unwrap();
-                communicate(&rt, &message, proxy.clone(), &unlocked.clone());
+                let settings = store.get_settings();
+
+                if let Some(account) = settings.account {
+                    communicate(&rt, &message, proxy.clone(), &unlocked.clone(), &account);
+                }
             },
             Cmd::Evaluate { script, options } => {
                 let mut unlocked = handler_folder.lock().unwrap();
@@ -175,6 +191,10 @@ fn main() -> wry::Result<()> {
                     script_result: None
                 });
             },
+            Cmd::Settings { settings } => {
+                store.set_account(&settings.account);
+                proxy.send_event(UserEvent::UpdateSettings { settings });
+            }
             _ => {}
         }
     };
@@ -185,13 +205,41 @@ fn main() -> wry::Result<()> {
         .with_transparent(true)
         .build(&event_loop)?;
 
-    window.set_visible(false);
+    window.set_visible(true);
 
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
         .with_background_color((0, 0, 0, 1))
         .with_ipc_handler(handler)
         .with_transparent(true)
+        /*
+        .with_new_window_req_handler(|url| {
+            println!("win: {url}");
+            true
+        })
+        .with_custom_protocol("legal".into(), |req| {
+            println!("{:?}", req.uri().host());
+            println!("{:?}", req.method());
+
+            match req.uri().host() {
+                Some("tos") => Response::builder()
+                    .header("Access-Control-Allow-Origin", "*")
+                    .header("Access-Control-Allow-Headers", "*")
+                    .header("Access-Control-Allow-Methods", "*")
+                    .body(Cow::Owned(include_bytes!("../www/tos.html").to_vec()))
+                    .map_err(Into::into),
+                Some("privacy_policy") => Response::builder()
+                    .header("Access-Control-Allow-Origin", "http://localhost")
+                    .body(Cow::Owned(include_bytes!("../www/privacy_policy.html").to_vec()))
+                    .map_err(Into::into),
+                _ => Response::builder()
+                    .header(ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost")
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Cow::Owned(include_bytes!("../www/404.html").to_vec()))
+                    .map_err(Into::into),
+            }
+        })
+        */
         .with_custom_protocol("icon".into(), move |req| {
             let mut ic = icons.lock().unwrap();
             let icon = req.uri().host().unwrap();
@@ -250,6 +298,11 @@ fn main() -> wry::Result<()> {
             Event::UserEvent(UserEvent::UpdateFileDeepLook { file }) => {
                 let stringified = serde_json::to_string(&file).unwrap();
                 webview.evaluate_script(&format!("setFileDeepLook({})", &stringified)).unwrap();
+            },
+
+            Event::UserEvent(UserEvent::UpdateSettings { settings }) => {
+                let stringified = serde_json::to_string(&settings).unwrap();
+                webview.evaluate_script(&format!("setSettings({})", &stringified)).unwrap();
             },
 
             Event::UserEvent(UserEvent::UpdateFolder { folder, script_result }) => {
@@ -346,7 +399,8 @@ fn communicate(
     rt: &Runtime,
     message: &str,
     proxy: EventLoopProxy<UserEvent>,
-    folder: &Folder)
+    folder: &Folder,
+    account: &Account)
 {
     let dir = folder.path.to_string_lossy();
     let files = folder.files.iter()
@@ -358,8 +412,9 @@ fn communicate(
 
     let message = format!(r#"Given these files "{files}" and folders "{folders}" in this directory "{dir}". {message}"#);
 
+    let account = account.clone();
     rt.spawn(async move {
-        let result = run_prompt("communicate.pr", message.as_bytes()).await;
+        let result = run_prompt("communicate.pr", message.as_bytes(), &account).await;
         let (kind, message) = result.split_once(":")
             .unwrap_or_else(|| ("FAILURE", "I'm sorry I don't understand, can you try again?"));
 
@@ -393,12 +448,25 @@ async fn run_script(bash_script: String, current_dir: &Path) -> Result<String, S
     }
 }
 
-async fn run_prompt(prompt_path: &str, input: &[u8]) -> String {
+async fn run_prompt(prompt_path: &str, input: &[u8], account: &Account) -> String {
     let prompts_dir = dirs::data_local_dir()
         .map(|data_dir| data_dir.join(constants::APP_NAME).join("prompts"))
         .expect("Could not find the apps data directory");
 
-    let mut cmd = Command::new("prompt")
+    let mut cmd = Command::new("prompt");
+
+    match account {
+        Account::Direct(key) => {
+            cmd.env("OPEN_AI_API_KEY", &key.0);
+        },
+        Account::Aerome(AccountAerome { key, .. }) => {
+            cmd
+                .env("OPEN_AI_API_KEY", key)
+                .env("OPEN_AI_PROXY_URL", constants::BACKEND_URL);
+        }
+    }
+
+    let mut cmd = cmd
         .arg(prompts_dir.join(prompt_path))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

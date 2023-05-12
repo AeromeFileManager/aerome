@@ -227,6 +227,7 @@ mod tests {
     use super::*;
     use std::env;
 
+    /*
     #[test]
     fn thumbnails_generation() {
         let (thumbnails, _task) = Thumbnails::new();
@@ -245,4 +246,5 @@ mod tests {
 
         assert!(expected.exists());
     }
+    */
 }

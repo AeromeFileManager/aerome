@@ -15,7 +15,7 @@
  */
 
 use serde::{Deserialize,Serialize};
-use crate::{Folder,FileMetadata,Suggestions,Options};
+use crate::{Folder,FileMetadata,Suggestions,Options,Settings};
 use std::path::PathBuf;
 use url::Url;
 
@@ -36,6 +36,9 @@ pub enum Cmd {
     },
     Options {
         options: Options
+    },
+    Settings {
+        settings: Settings
     },
     Communicate {
         message: String
@@ -71,6 +74,9 @@ pub enum UserEvent {
     },
     UpdateThumbnail {
         thumbnail: ThumbnailUpdate
+    },
+    UpdateSettings {
+        settings: Settings
     },
     NonexistentFolder {
         path: String
