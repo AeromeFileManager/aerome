@@ -628,7 +628,7 @@
             transform: translateX(0px);
         }
         100% {
-            transform: translateX(calc(var(--sign-up-width) - 130px));
+            transform: translateX(calc(var(--sign-up-width) - 140px));
         }
     }
 
@@ -661,13 +661,12 @@
         transition: all 0.3s ease-in-out;
     }
 
-
     form.stripe-lookalike button:last-child:focus-visible,
     form.stripe-lookalike button:last-child:hover {
         outline: none !important;
         text-decoration: underline;
         text-underline-offset: 5px;
-        letter-spacing: 0.3px;
+        letter-spacing: 1px;
     }
 
     form.stripe-lookalike .stripe-lookalike-entry {
@@ -861,7 +860,7 @@
         background: var(--secondary-bg);
         color: var(--secondary-pop);
         border: 0.3px solid var(--secondary-pop);
-        transition: width 0.3s ease-in-out;
+        transition: all 0.3s ease-in-out;
     }
 
     #account-information-aerome .unsubscribe[inert] > button {
@@ -869,7 +868,7 @@
     }
 
     #account-information-aerome .unsubscribe ~ button {
-        transition: width 0.3s ease-in-out;
+        transition: all 0.3s ease-in-out;
         right: 0;
     }
 
@@ -1524,17 +1523,7 @@
         function maybeClose(e) {
             const close = e.target.closest('img[alt="Close"]');
             if (!close) return;
-            closeSignUpForms();
-        }
-
-        function closeSignUpForms() {
-            const signUpFormsEl = document.getElementById('sign-up');
-
-            for (const child of signUpFormsEl.children) {
-                child.style.display = 'none';
-            }
-
-            signUpFormsEl.style.display = 'none';
+            hideSignUp();
         }
 
         function maybeNavigateBack(e) {
@@ -1624,12 +1613,15 @@
             const passwordEl = e.currentTarget.querySelector('input[type="password"][name="password"]');
             const passwordConfirmEl = e.currentTarget.querySelector('input[type="password"][name="confirm_password"]');
 
+
             if (passwordEl.value !== passwordConfirmEl.value) {
                 passwordEl.setCustomValidity('Passwords do not match');
-                    console.error('Passwords do not match');
             } else {
                 passwordEl.setCustomValidity('');
-                    console.log('Passwords match');
+            }
+
+            if (e.target.matches('input[type="email"]')) {
+                e.target.setCustomValidity('');
             }
         });
 
@@ -1720,7 +1712,7 @@
                     break;
                 }
                 case 'close': {
-                    closeSignUpForms();
+                    hideSignUp();
                     break;
                 }
             }
@@ -1734,9 +1726,9 @@
                 child.style.display = 'none';
             }
 
-            aeromeAccountInformationEl.style.display = 'block';
-            showSLForm(aeromeAccountInformationEl);
+            showSLForm(aeromeAccountInformationEl, 0);
             showProgressBar(aeromeAccountInformationEl);
+            aeromeAccountInformationEl.style.display = 'block';
 
             const response = await (async function () {
                 try {
@@ -1757,7 +1749,9 @@
                 const url = new URL(ACCOUNTS_SERVER);
                 url.search = new URLSearchParams([ [ 'key', key ], [ 'email', email ] ]);
                 paymentFrame.src = url;
-                showSLForm(paymentFrame);
+                paymentFrame.onload = () => {
+                    showSLForm(paymentFrame);
+                };
             };
 
             const createUnsubscribedElement = () => {
@@ -1954,6 +1948,7 @@
 
         async function hideSignUp() {
             document.getElementById('sign-up').style.display = 'none';
+            document.getElementById('stripe-payment').src = '';
             document.querySelector('main').classList.remove('inert');
             document.querySelector('header .folder-wrapper #folder').removeAttribute('inert');
 
@@ -1981,9 +1976,9 @@
             el.style.display = 'none';
         }
 
-        async function showSLForm(el) {
+        async function showSLForm(el, duration = 200) {
             const anim = el.animate([ { opacity: 0 }, { opacity: 1 }], {
-                duration: 200,
+                duration,
                 fill: 'forwards',
                 easing: 'ease-in'
             });
