@@ -30,6 +30,7 @@ use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
 use tokio::task::AbortHandle;
 use std::borrow::Cow;
 use std::fs;
+use std::ffi::OsStr;
 use std::path::{PathBuf,Path};
 use std::process::Stdio;
 use std::sync::{Arc,Mutex};
@@ -212,34 +213,11 @@ fn main() -> wry::Result<()> {
         .with_background_color((0, 0, 0, 1))
         .with_ipc_handler(handler)
         .with_transparent(true)
-        /*
-        .with_new_window_req_handler(|url| {
-            println!("win: {url}");
-            true
+        .with_new_window_req_handler(|url| match &*url {
+            "https://aerome.net/tos.html" |
+            "https://aerome.net/privacy_policy.html" => { open(url); false },
+            _ => false
         })
-        .with_custom_protocol("legal".into(), |req| {
-            println!("{:?}", req.uri().host());
-            println!("{:?}", req.method());
-
-            match req.uri().host() {
-                Some("tos") => Response::builder()
-                    .header("Access-Control-Allow-Origin", "*")
-                    .header("Access-Control-Allow-Headers", "*")
-                    .header("Access-Control-Allow-Methods", "*")
-                    .body(Cow::Owned(include_bytes!("../www/tos.html").to_vec()))
-                    .map_err(Into::into),
-                Some("privacy_policy") => Response::builder()
-                    .header("Access-Control-Allow-Origin", "http://localhost")
-                    .body(Cow::Owned(include_bytes!("../www/privacy_policy.html").to_vec()))
-                    .map_err(Into::into),
-                _ => Response::builder()
-                    .header(ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost")
-                    .status(StatusCode::NOT_FOUND)
-                    .body(Cow::Owned(include_bytes!("../www/404.html").to_vec()))
-                    .map_err(Into::into),
-            }
-        })
-        */
         .with_custom_protocol("icon".into(), move |req| {
             let mut ic = icons.lock().unwrap();
             let icon = req.uri().host().unwrap();
@@ -361,12 +339,12 @@ fn main() -> wry::Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn open(path: &Path) -> bool {
+fn open(path: impl AsRef<OsStr>) -> bool {
     Runtime::new()
         .unwrap()
         .block_on(async move {
             let result = Command::new("xdg-open")
-                .args(&[ &path ])
+                .args(&[ path ])
                 .output()
                 .await
                 .unwrap();
@@ -380,7 +358,7 @@ fn open(path: &Path) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-fn open(path: &Path) -> bool {
+fn open(path: impl AsRef<OsStr>) -> bool {
     Runtime::new().unwrap().block_on(async move {
         Command::new("open")
             .args(&[ &path ])
