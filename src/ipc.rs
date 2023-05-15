@@ -67,7 +67,7 @@ pub enum UserEvent {
     },
     UpdateFolder {
         folder: Folder,
-        script_result: Option<Result<String, String>>
+        script_result: Option<ConversationItem>
     },
     UpdateSuggestions {
         description: Suggestions
@@ -82,6 +82,24 @@ pub enum UserEvent {
         path: String
     },
     Ai(AiResponse),
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationItem {
+    from: &'static str,
+    pub message: String,
+    pub code: Option<String>
+}
+
+impl ConversationItem {
+    pub fn new(message: String, code: Option<String>) -> Self {
+        Self {
+            code,
+            from: "ai",
+            message,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize)]

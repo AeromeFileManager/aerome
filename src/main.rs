@@ -180,7 +180,11 @@ fn main() -> wry::Result<()> {
 
                 proxy.send_event(UserEvent::UpdateFolder {
                     folder: (*unlocked).clone(),
-                    script_result: Some(result)
+                    script_result: Some(result
+                        .map(|r| ConversationItem::new(
+                            format!("Command finished with result:\n\n{r}"), None))
+                        .unwrap_or_else(|r| ConversationItem::new(
+                            format!("Command finished with error:\n\n{r}"), None)))
                 });
             },
             Cmd::Options { options } => {
@@ -287,25 +291,12 @@ fn main() -> wry::Result<()> {
                 let stringified = serde_json::to_string(&folder).unwrap();
                 webview.evaluate_script(&format!("setFolder({})", &stringified)).unwrap();
 
-                if let Some(result) = script_result {
-                    match result {
-                        Ok(message) if message.len() == 0 => {
-                            webview.evaluate_script("closeActionsBox()").unwrap();
-                        },
-                        Ok(message) => {
-                            let message = message.replace("`", "\\`");
-                            let message = format!("Command finished with result:\n\n{message}");
-                            let script = format!("addConversationItem('ai', `{message}`)");
-
-                            webview.evaluate_script(&script).unwrap();
-                        },
-                        Err(message) => {
-                            let message = message.replace("`", "\\`");
-                            let message = format!("Command finished with error:\n\n{message}");
-                            let script = format!("addConversationItem('ai', `{message}`)");
-
-                            webview.evaluate_script(&script).unwrap();
-                        }
+                if let Some(item) = script_result {
+                    if item.message.len() == 0 {
+                        webview.evaluate_script("closeActionsBox()").unwrap();
+                    } else {
+                        let item = serde_json::to_string(&item).unwrap();
+                        webview.evaluate_script(&format!("addConversationItem({item})")).unwrap();
                     }
                 }
             },
@@ -313,17 +304,15 @@ fn main() -> wry::Result<()> {
             Event::UserEvent(UserEvent::Ai(response)) => match response {
                 AiResponse::Success(success) => {
                     let message = "Sure, I can do that. Please review this script before evaluating it:";
-                    let code = success.replace('\\', "\\\\")
-                        .replace('`', "\\`")
-                        .replace('$', "\\$");
-                    let script = &format!("addConversationItem('ai', `{message}`, `{code}`)");
+                    let item = ConversationItem::new(message.to_string(), Some(success));
+                    let item = serde_json::to_string(&item).unwrap();
 
-                    webview.evaluate_script(script).unwrap();
+                    webview.evaluate_script(&format!("addConversationItem({item})")).unwrap();
                 },
                 AiResponse::Failure(failure) => {
-                    let message = failure.replace('`', "\\`");
-                    webview.evaluate_script(&format!("addConversationItem('ai', `{}`)", message))
-                        .unwrap();
+                    let item = ConversationItem::new(failure, None);
+                    let item = serde_json::to_string(&item).unwrap();
+                    webview.evaluate_script(&format!("addConversationItem({item})")).unwrap();
                 },
             },
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } |

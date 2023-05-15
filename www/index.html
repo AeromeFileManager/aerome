@@ -1199,8 +1199,7 @@
             if (!input) return;
 
             const message = input.value;
-
-            addConversationItem('user', message);
+            addConversationItem({ from: 'user', message });
         });
 
         document.getElementById('files').addEventListener('click', e => {
@@ -1223,7 +1222,7 @@
             const message = document.getElementById('action').value;
             if (!message) return;
 
-            addConversationItem('user', message);
+            addConversationItem({ from: 'user', message });
         });
 
         window.setFileDeepLook = ({ name, path, openers }) => {
@@ -1322,7 +1321,7 @@
             }
         };
 
-        window.addConversationItem = (from, message, codeblock) => {
+        window.addConversationItem = ({ from, message, code }) => {
             const conversation = document.getElementById('conversation');
 
             if (from === 'user' && conversation.classList.contains('locked')) {
@@ -1345,22 +1344,22 @@
             li.className = from;
             li.append(p);
 
-            if (codeblock) {
+            if (code) {
                 const pre = document.createElement('pre');
-                const code = document.createElement('code');
+                const codeEl = document.createElement('code');
                 const evaluateButton = document.createElement('button');
                 const evaluateCode = () => {
-                    rpc.invoke({ cmd: 'evaluate', script: codeblock, options: future.options });
+                    rpc.invoke({ cmd: 'evaluate', script: code, options: future.options });
                 };
 
-                code.append(pre);
-                pre.textContent = codeblock;
+                codeEl.append(pre);
+                pre.textContent = code;
 
                 evaluateButton.className = 'evaluate';
                 evaluateButton.textContent = 'Evaluate';
                 evaluateButton.addEventListener('click', evaluateCode, { once: true });
 
-                li.append(code);
+                li.append(codeEl);
                 li.append(evaluateButton);
             }
 
@@ -1371,7 +1370,7 @@
             if (from === 'user') {
                 document.getElementById('action').value = '';
 
-                const item = addConversationItem('ai', 'Hold on a second while I process this');
+                const item = addConversationItem({ from: 'ai', message: 'Hold on a second while I process this' });
                 item.classList.add('lock');
                 conversation.classList.add('locked');
             }
