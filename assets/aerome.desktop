@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Terminal=false
-Exec=future
-Name=Future
-Comment=Future File Manager
-Icon=future
+Exec=aerome
+Name=Aerome
+Comment=Aerome File Manager
+Icon=aerome
 Categories=GNOME;GTK;

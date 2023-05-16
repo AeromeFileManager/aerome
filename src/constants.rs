@@ -22,7 +22,7 @@ pub const APP_NAME: &'static str = "aerome";
 pub const FILE_MANAGER_THEME_NAME: &'static str = "AeromeFileManager";
 
 pub const APP_DESKTOP_ENTRY: &'static [u8] =
-    include_bytes!("../assets/future.desktop");
+    include_bytes!("../assets/aerome.desktop");
 
 pub const APP_ICON: &'static [u8] =
     include_bytes!("../assets/icon/icon.png");
@@ -121,12 +121,12 @@ pub fn install() {
 fn install_desktop_files() {
     if let Some(applications_dir) = dirs::data_local_dir().map(|d| d.join("applications")) {
         fs::create_dir_all(&applications_dir).expect("Could not write to the apps data directory");
-        fs::write(applications_dir.join("future.desktop"), APP_DESKTOP_ENTRY).unwrap();
+        fs::write(applications_dir.join("aerome.desktop"), APP_DESKTOP_ENTRY).unwrap();
     }
 
     if let Some(icons_dir) = dirs::data_local_dir().map(|d| d.join("icons")) {
         fs::create_dir_all(&icons_dir).expect("Could not write to the apps data directory");
-        fs::write(icons_dir.join("future.png"), APP_ICON).unwrap();
+        fs::write(icons_dir.join("aerome.png"), APP_ICON).unwrap();
     }
 }
 

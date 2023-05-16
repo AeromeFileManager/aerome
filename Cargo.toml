@@ -1,5 +1,5 @@
 [package]
-name = "future"
+name = "aerome"
 version = "0.1.0"
 edition = "2021"
 description = "A file manager from the future"
