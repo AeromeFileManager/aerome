@@ -58,8 +58,11 @@ use serde_json::json;
 use thumbnails::{ThumbnailSize,Thumbnails};
 use xdg_mime::{SharedMimeInfo, Guess};
 use store::Store;
+use prompt::{PromptArgs,EvaluateError,EvaluateResult,evaluate};
+use ai::{ChatError, ChatError::OpenAIError};
 
 fn main() -> wry::Result<()> {
+    env_logger::init();
     constants::install();
 
     let store = Store::new();
@@ -381,7 +384,7 @@ fn communicate(
 
     let account = account.clone();
     rt.spawn(async move {
-        let result = run_prompt("communicate.pr", message.as_bytes(), &account).await;
+        let result = run_prompt("communicate.pr", &message, &account).await;
         let (kind, message) = result.split_once(":")
             .unwrap_or_else(|| ("FAILURE", "I'm sorry I don't understand, can you try again?"));
 
@@ -415,40 +418,94 @@ async fn run_script(bash_script: String, current_dir: &Path) -> Result<String, S
     }
 }
 
-async fn run_prompt(prompt_path: &str, input: &[u8], account: &Account) -> String {
+async fn run_prompt(prompt_path: &str, input: &str, account: &Account) -> String {
     let prompts_dir = dirs::data_local_dir()
         .map(|data_dir| data_dir.join(constants::APP_NAME).join("prompts"))
         .expect("Could not find the apps data directory");
 
-    let mut cmd = Command::new("prompt");
+    let (api_key, api_proxy) = match account {
+        Account::Direct(key) => (Some(key.0.clone()), None),
+        Account::Aerome(AccountAerome { key, .. }) => (
+            Some(key.clone()),
+            Some(constants::BACKEND_URL.to_owned())
+        ),
+    };
 
-    match account {
-        Account::Direct(key) => {
-            cmd.env("OPEN_AI_API_KEY", &key.0);
-        },
-        Account::Aerome(AccountAerome { key, .. }) => {
-            cmd
-                .env("OPEN_AI_API_KEY", key)
-                .env("OPEN_AI_PROXY_URL", constants::BACKEND_URL);
+    let args = PromptArgs {
+        path: prompts_dir.join(prompt_path),
+        quiet: false,
+        api_key,
+        api_proxy,
+        append: Some(input.to_owned()),
+        test: None,
+        watch: None
+    };
+
+    let out = PromptOut(Vec::new());
+    let result = evaluate(args, out).await;
+
+    match result {
+        Ok(out) => String::from_utf8(out.0).unwrap(),
+        Err(e) => {
+            let message = match account {
+                Account::Direct(_) => match e {
+                    EvaluateError::ChatError(ChatError::NetworkError(e)) => {
+                        format!("{}", e.without_url())
+                    },
+                    EvaluateError::ChatError(ChatError::OpenAIError(e)) if e.status == 401 => {
+                        String::from("Invalid API key")
+                    },
+                    EvaluateError::ChatError(ChatError::OpenAIError(e)) if e.status == 429 => {
+                        String::from(
+                            "You've exceeded your quota or Open AI's servers are overloaded")
+                    },
+                    EvaluateError::ChatError(ChatError::OpenAIError(e)) if e.status == 500 => {
+                        String::from("Open AI's server experienced an internal error")
+                    },
+                    _ => {
+                        eprintln!("{e:#?}");
+                        String::from("The AI assistant failed with an unknown error, sorry!")
+                    }
+                },
+                Account::Aerome(_) => match e {
+                    EvaluateError::ChatError(ChatError::NetworkError(e)) => {
+                        format!("{}", e.without_url())
+                    },
+                    EvaluateError::ChatError(ChatError::OpenAIError(e)) if e.status == 401 => {
+                        String::from("Invalid API key")
+                    },
+                    EvaluateError::ChatError(ChatError::OpenAIError(e)) if e.status == 429 => {
+                        String::from("\
+                            You've exceeded your monthly quota. You can buy more credits in the \
+                            account page.")
+                    },
+                    _ => {
+                        eprintln!("{e:#?}");
+                        String::from("The AI assistant failed with an unknown error, sorry!")
+                    }
+                }
+            };
+
+            format!("FAILURE: {message}")
         }
     }
 
-    let mut cmd = cmd
-        .arg(prompts_dir.join(prompt_path))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
+}
 
-    let mut stdin = cmd.stdin.take().unwrap();
-    stdin.write_all(input).await.unwrap();
-    stdin.write_all(b"\n").await.unwrap();
+#[derive(Debug)]
+struct PromptOut(Vec<u8>);
 
-    let mut stdout = cmd.stdout.take().unwrap();
-    let mut result = String::new();
-    stdout.read_to_string(&mut result).await.unwrap();
+impl std::io::Write for PromptOut {
+    fn flush(&mut self) -> Result<(), std::io::Error> {
+        std::io::Write::flush(&mut self.0)
+    }
+    fn write(&mut self, d: &[u8]) -> Result<usize, std::io::Error> {
+        std::io::Write::write(&mut self.0, d)
+    }
+}
 
-    result
+impl Clone for PromptOut {
+    fn clone(&self) -> Self { PromptOut(self.0.to_owned()) }
 }
 
 fn dummy_abort_handle(rt: &Runtime) -> AbortHandle {

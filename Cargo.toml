@@ -7,10 +7,13 @@ description = "A file manager from the future"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ai-cli = { path = "../ai" }
+prompt = { path = "../prompt" }
 cozo = "0.6.0"
 chrono = "0.4.24"
 derive_more = "0.99.17"
 dirs = "5.0.0"
+env_logger = "0.10.0"
 http = "0.2.9"
 image = "0.24.6"
 md5 = "0.7.0"
