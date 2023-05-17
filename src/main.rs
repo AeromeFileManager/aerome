@@ -75,7 +75,6 @@ fn main() -> wry::Result<()> {
     let proxy = event_loop.create_proxy();
     let rt = Runtime::new().unwrap();
     let theme = Icons::get_current_theme_name();
-    let investigation: Mutex<AbortHandle> = Mutex::new(dummy_abort_handle(&rt));
 
     let handler_folder = folder.clone();
     let handler_thumbnails = thumbnails.clone();
@@ -213,7 +212,7 @@ fn main() -> wry::Result<()> {
         .with_transparent(true)
         .build(&event_loop)?;
 
-    window.set_visible(true);
+    window.set_visible(false);
 
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
@@ -507,34 +506,6 @@ impl std::io::Write for PromptOut {
 impl Clone for PromptOut {
     fn clone(&self) -> Self { PromptOut(self.0.to_owned()) }
 }
-
-fn dummy_abort_handle(rt: &Runtime) -> AbortHandle {
-    rt.spawn(async {}).abort_handle()
-}
-
-/*
-fn investigate(rt: &Runtime, folder: Folder, proxy: EventLoopProxy<UserEvent>) -> AbortHandle {
-    rt.spawn(async move {
-        let files = folder.files.iter()
-            .map(|f| format!("{}", f.name))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let result = run_prompt("describe.pr", files.as_bytes()).await;
-
-        let mut lines = result.lines();
-        let purpose = lines.next().unwrap().replace("\"", "\\\"");
-        let actions = lines.next().unwrap();
-
-        proxy.send_event(UserEvent::UpdateSuggestions {
-            description: serde_json::from_str(&format!(r#"{{
-                "purpose": "{purpose}",
-                "actions": {actions}
-            }}"#)).unwrap()
-        });
-    }).abort_handle()
-}
-*/
 
 fn get_folder(
     path: &Path,
