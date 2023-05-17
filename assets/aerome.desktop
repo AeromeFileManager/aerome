@@ -4,5 +4,5 @@ Terminal=false
 Exec=aerome
 Name=Aerome
 Comment=Aerome File Manager
-Icon=aerome
+Icon=$ICON
 Categories=GNOME;GTK;

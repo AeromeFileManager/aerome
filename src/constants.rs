@@ -15,14 +15,15 @@
  */
 
 use std::fs;
+use std::process::Command;
 pub use super::prompts::*;
 
 pub const BACKEND_URL: &'static str = "http://localhost:9008";
 pub const APP_NAME: &'static str = "aerome";
 pub const FILE_MANAGER_THEME_NAME: &'static str = "AeromeFileManager";
 
-pub const APP_DESKTOP_ENTRY: &'static [u8] =
-    include_bytes!("../assets/aerome.desktop");
+pub const APP_DESKTOP_ENTRY: &'static str =
+    include_str!("../assets/aerome.desktop");
 
 pub const APP_ICON: &'static [u8] =
     include_bytes!("../assets/icon/icon.png");
@@ -115,18 +116,33 @@ pub fn install() {
     install_icons();
     install_prompts();
     install_desktop_files();
+
+    if cfg!(target_os = "linux") {
+        if let Ok(exe_path) = std::env::current_exe() {
+            let aerome = dirs::executable_dir().map(|e| e.join("aerome")).unwrap();
+            if !aerome.exists() {
+                fs::copy(&exe_path, &aerome).unwrap();
+            }
+        }
+        let _ = Command::new("update-desktop-database").output();
+    }
 }
 
 #[cfg(target_os = "linux")]
 fn install_desktop_files() {
-    if let Some(applications_dir) = dirs::data_local_dir().map(|d| d.join("applications")) {
-        fs::create_dir_all(&applications_dir).expect("Could not write to the apps data directory");
-        fs::write(applications_dir.join("aerome.desktop"), APP_DESKTOP_ENTRY).unwrap();
+    let app_icon_path = dirs::data_local_dir()
+        .map(|data_dir| data_dir.join(APP_NAME).join("icon.png"))
+        .unwrap();
+
+    if !app_icon_path.exists() {
+        fs::write(&app_icon_path, APP_ICON).unwrap();
     }
 
-    if let Some(icons_dir) = dirs::data_local_dir().map(|d| d.join("icons")) {
-        fs::create_dir_all(&icons_dir).expect("Could not write to the apps data directory");
-        fs::write(icons_dir.join("aerome.png"), APP_ICON).unwrap();
+    if let Some(applications_dir) = dirs::data_local_dir().map(|d| d.join("applications")) {
+        let desktop_entry = APP_DESKTOP_ENTRY.replace("$ICON", app_icon_path.to_str().unwrap());
+
+        fs::create_dir_all(&applications_dir).expect("Could not write to the apps data directory");
+        fs::write(applications_dir.join("aerome.desktop"), desktop_entry).unwrap();
     }
 }
 
@@ -156,12 +172,6 @@ fn install_icons() {
     fs::create_dir_all(&mimetypes_dir).unwrap();
     fs::create_dir_all(&places_dir).unwrap();
     fs::create_dir_all(&scalable_dir).unwrap();
-
-    /*
-    if places_dir.join("./folder.png").exists() {
-        return;
-    }
-    */
 
     fs::write(
         places_dir.join("./folder.png"),
