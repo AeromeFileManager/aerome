@@ -1582,28 +1582,49 @@
 
         document.getElementById('sign-in-aerome').addEventListener('submit', async e => {
             e.preventDefault();
+
+            // The submit button is used to report unknown server errors, we have to clear it hear
+            // in order to allow for a retry
+            e.target
+                .querySelector('button[type="submit"]')
+                .setCustomValidity('');
+
             showProgressBar(e.target);
 
             const formData = new FormData(e.target);
-            try {
-                const url = new URL('/auth/login', ACCOUNTS_SERVER);
-                const params = new URLSearchParams(formData);
-                const response = await fetch(url, {
-                    method: 'POST',
-                    credentials: 'include',
-                    body: params
-                });
+            const url = new URL('/auth/login', ACCOUNTS_SERVER);
+            const params = new URLSearchParams(formData);
+            const response = await (async function() {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        credentials: 'include',
+                        body: params
+                    });
+                } catch (e) {
+                    return { ok: false };
+                }
+            })();
 
+            if (response.ok) {
                 const aerome = await response.json();
                 rpc.invoke({ cmd: 'settings', settings: { account: { aerome } } });
+                hideSignUp();
+            } else {
+                const submitButton = e.target.querySelector('button[type="submit"]');
 
-                if (response.ok) {
-                    hideSignUp();
-                } else {
-                    console.error(await response.text());
-                }
-            } catch (e) {
-                console.error(e);
+                submitButton.setCustomValidity('Unknown server error');
+                e.target.reportValidity();
+
+                let err;
+                try {
+                    err = await response.text();
+                } catch (e) {}
+
+                console.error(err || 'Unknown server error');
+                setTimeout(() => {
+                    submitButton.setCustomValidity('');
+                }, 3000);
             }
 
             hideProgressBar(e.target);
@@ -1678,21 +1699,30 @@
                     };
                     rpc.invoke({ cmd: 'settings', settings: { account: { aerome } } });
                 } else {
-                    const err = await response.json();
-                    switch (err.type) {
+                    const { error } = await response.json();
+                    switch (error.type) {
                         case 'invalid_pass': {
-                            e.target.querySelector('input[type="password"]').setCustomValidity(err.message);
+                            e.target.querySelector('input[type="password"]').setCustomValidity(error.message);
                             break;
                         }
                         case 'invalid_email': {
-                            e.target.querySelector('input[type="email"]').setCustomValidity(err.message);
+                            e.target.querySelector('input[type="email"]').setCustomValidity(error.message);
                             break;
                         }
                     }
                     e.target.reportValidity();
                 }
-            } catch (e) {
-                console.error(e);
+            } catch (error) {
+                const submitButton = e.target.querySelector('button[type="submit"]');
+
+                submitButton.setCustomValidity('Unknown server error');
+                e.target.reportValidity();
+
+                setTimeout(() => {
+                    submitButton.setCustomValidity('');
+                }, 3000);
+
+                console.error(error);
             }
 
             hideProgressBar(e.target);
