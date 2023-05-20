@@ -22,6 +22,8 @@ use url::Url;
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
+    /// Show developer tools in when not in production
+    Dev,
     Initialized,
     Back {
         options: Options
@@ -61,6 +63,7 @@ pub enum WindowCmd {
 
 pub enum UserEvent {
     CloseWindow,
+    DevTools,
     ExecEval(),
     UpdateFileDeepLook {
         file: FileMetadata

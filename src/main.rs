@@ -51,7 +51,10 @@ use wry::{
         Response,
         StatusCode
     },
-    webview::WebViewBuilder
+    webview::{
+        WebView,
+        WebViewBuilder
+    }
 };
 use url::Url;
 use serde_json::json;
@@ -80,6 +83,11 @@ fn main() -> wry::Result<()> {
     let handler_thumbnails = thumbnails.clone();
     let handler = move |window: &Window, req: String| {
         match serde_json::from_str(req.as_str()).unwrap() {
+            Cmd::Dev => {
+                if cfg!(debug_assertions) {
+                    proxy.send_event(UserEvent::DevTools);
+                }
+            },
             Cmd::Initialized => {
                 let path = std::env::current_dir().unwrap()
                     .join("assets").join("icon").join("icon")
@@ -271,10 +279,15 @@ fn main() -> wry::Result<()> {
         .build()?;
 
     let event_loop_folder = folder.clone();
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
 
         match event {
+            Event::UserEvent(UserEvent::DevTools) => {
+                open_devtools(&webview);
+            },
+
             Event::UserEvent(UserEvent::UpdateSuggestions { description }) => {
                 let stringified = serde_json::to_string(&description).unwrap();
                 webview.evaluate_script(&format!("setSuggestions({})", &stringified)).unwrap();
@@ -348,6 +361,14 @@ fn main() -> wry::Result<()> {
 
     Ok(())
 }
+
+#[cfg(debug_assertions)]
+fn open_devtools(webview: &WebView) {
+    webview.open_devtools();
+}
+
+#[cfg(not(debug_assertions))]
+fn open_devtools(webview: &WebView) {}
 
 #[cfg(target_os = "linux")]
 fn open(path: impl AsRef<OsStr>) -> bool {

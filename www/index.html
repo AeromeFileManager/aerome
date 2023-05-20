@@ -1502,6 +1502,12 @@
 
         document.addEventListener('keydown', e => {
             switch (event.key) {
+                case 'I': {
+                    if (event.ctrlKey && event.shiftKey) {
+                        rpc.invoke({ cmd: 'dev' });
+                    }
+                    break;
+                }
                 case 'l': {
                     if (event.ctrlKey) {
                         document.getElementById('folder').focus();
