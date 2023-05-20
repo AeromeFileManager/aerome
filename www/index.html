@@ -383,8 +383,43 @@
         border-top: 1px solid var(--color-offwhite);
     }
 
+    #action-wrapper:not(.open.conversation) ~ #action-sibling #conversation,
+    #action-wrapper:not(.open.actions) ~ #action-sibling #actions {
+        display: none;
+    }
+
     #action-wrapper.open ~ #action-sibling {
         height: 220px;
+    }
+
+    #action-wrapper.open.actions,
+    #action-wrapper.open.actions ~ #action-sibling {
+        height: 120px;
+    }
+
+    #actions {
+        display: flex;
+        overflow-x: auto;
+    }
+
+    #actions li {
+        min-width: 150px;
+        min-height: 40px;
+        background: var(--secondary-bg);
+        color: var(--secondary-fg);
+        margin: 10px;
+        padding: 0 10px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    #actions li button {
+        width: 100%;
+        height: 100%;
+        appearance: none;
+        background: transparent;
+        border: 0;
+        cursor: pointer;
     }
 
     #action-wrapper ~ input#action {
@@ -432,7 +467,6 @@
         transition: height 0.25s ease-in-out;
         color: black;
     }
-
 
     #action-wrapper ~ #action-sibling ul#actions,
     #action-wrapper ~ #action-sibling ul#conversation {
@@ -530,10 +564,6 @@
         animation: ellipsis steps(4,end) 900ms infinite;
         content: "\2026"; /* ascii code for the ellipsis character */
         width: 0px;
-    }
-
-    #action-wrapper:not(.open.conversation) ~ #action-sibling #conversation {
-        display: none;
     }
 
     @keyframes ellipsis {
@@ -879,9 +909,6 @@
 </style>
 <body>
     <div id="sign-up" style="display: none">
-        <!--
- aria-busy="true" aria-describedby="progress-bar"
-        -->
         <form class="stripe-lookalike" id="sign-up-tos">
             <h1>Welcome</h1>
 
@@ -1106,8 +1133,7 @@
 
         <div class="spacer" aria-hidden=true></div>
 
-        <div id="action-wrapper">
-        </div>
+        <div id="action-wrapper"></div>
 
         <input type="text" id="action" />
 
@@ -1116,12 +1142,8 @@
 
         <div id="action-sibling">
             <div class="overflow-wrapper">
-                <ul id="actions">
-
-                </ul>
-
-                <ul id="conversation">
-                </ul>
+                <ul id="actions"></ul>
+                <ul id="conversation"></ul>
             </div>
             <button id="close-actions"></button>
         </div>
@@ -1183,6 +1205,7 @@
             }
         };
 
+        let lastUserMessage = '';
         let rpc = {
             invoke(arg) {
                 window.ipc.postMessage(JSON.stringify(arg));
@@ -1191,6 +1214,7 @@
 
         document.getElementById('back').addEventListener('click', e => {
             rpc.invoke({ cmd: 'back', options: future.options });
+            closeActionsBox();
         });
 
         document.getElementById('action').addEventListener('keypress', e => {
@@ -1200,7 +1224,18 @@
             if (!input) return;
 
             const message = input.value;
+            lastUserMessage = message;
             addConversationItem({ from: 'user', message });
+            rpc.invoke({ cmd: 'communicate', message });
+        });
+
+        document.getElementById('action-submit').addEventListener('click', e => {
+            const message = document.getElementById('action').value;
+            if (!message) return;
+
+            lastUserMessage = message;
+            addConversationItem({ from: 'user', message });
+            rpc.invoke({ cmd: 'communicate', message });
         });
 
         document.getElementById('files').addEventListener('click', e => {
@@ -1214,17 +1249,7 @@
             if (!li) return;
         });
 
-        document.getElementById('action-suggestions').addEventListener('click', e => {
-            document.getElementById('action-wrapper').classList.add('open', 'actions');
-            document.getElementById('action-wrapper').classList.remove('conversation');
-        });
-
-        document.getElementById('action-submit').addEventListener('click', e => {
-            const message = document.getElementById('action').value;
-            if (!message) return;
-
-            addConversationItem({ from: 'user', message });
-        });
+        document.getElementById('action-suggestions').addEventListener('click', showActionSuggestions);
 
         window.setFileDeepLook = ({ name, path, openers }) => {
             // TODO: This is meant to have extended file attributes, large thumbnails,
@@ -1242,6 +1267,19 @@
                 el.classList.remove('error');
             }
         };
+
+        function showActionSuggestions() {
+            document.getElementById('action-wrapper').classList.add('open', 'actions');
+            document.getElementById('action-wrapper').classList.remove('conversation');
+        }
+
+        function showConversation() {
+            document.getElementById('action-wrapper').classList.add('open', 'conversation');
+            document.getElementById('action-wrapper').classList.remove('actions');
+
+            const scrollView = document.querySelector('#action-sibling .overflow-wrapper');
+            scrollView.scrollTo(0, scrollView.scrollHeight);
+        }
 
         let initialized = false;
         window.setFolder = ({ path, files }) => {
@@ -1279,7 +1317,6 @@
             }
         };
 
-
         window.updateThumbnail = ({ name, url }) => {
             const li = document.getElementById(`file-${encodeFilenameToId(name)}`);
             if (li) {
@@ -1292,25 +1329,30 @@
             document.getElementById('files').classList.add('missing');
         };
 
-        window.setSuggestions = ({ path, actions }) => {
+        window.setSuggestions = ({ path, actions = [] }) => {
             document.getElementById('actions').innerHTML = '';
 
             for (const action of actions) {
                 const li = document.createElement('li');
-                const details = document.createElement('details');
-                const summary = document.createElement('summary');
-                const p = document.createElement('p');
+                const button = document.createElement('button');
 
-                summary.textContent = action.title;
-                p.textContent = action.description;
+                button.textContent = action.description;
+                li.append(button);
 
-                details.append(summary);
-                details.append(p);
-
-                li.append(details);
-
-                details.addEventListener('click', detailsAnimationOpen.bind(details, details));
-                details.addEventListener('animationend', detailsAnimationEnd.bind(details, details));
+                button.addEventListener('click', event => {
+                    lastUserMessage = null;
+                    addConversationItem({
+                        from: 'user',
+                        message: action.question,
+                        simulated: true
+                    });
+                    addConversationItem({
+                        from: 'ai',
+                        message: 'Sure, I can do that. Please review this script before evaluating it:',
+                        code: action.code,
+                        simulated: true
+                    });
+                });
                 document.getElementById('actions').append(li);
             }
         };
@@ -1322,15 +1364,11 @@
             }
         };
 
-        window.addConversationItem = ({ from, message, code }) => {
+        window.addConversationItem = ({ from, message, code, simulated }) => {
             const conversation = document.getElementById('conversation');
 
             if (from === 'user' && conversation.classList.contains('locked')) {
                 return;
-            }
-
-            if (from === 'user') {
-                rpc.invoke({ cmd: 'communicate', message });
             }
 
             if (from === 'ai' && conversation.classList.contains('locked')) {
@@ -1350,7 +1388,15 @@
                 const codeEl = document.createElement('code');
                 const evaluateButton = document.createElement('button');
                 const evaluateCode = () => {
-                    rpc.invoke({ cmd: 'evaluate', script: code, options: future.options });
+                    rpc.invoke({
+                        cmd: 'evaluate',
+                        item: {
+                            from: 'user',
+                            message: lastUserMessage,
+                            code
+                        },
+                        options: future.options
+                    });
                 };
 
                 codeEl.append(pre);
@@ -1365,13 +1411,15 @@
             }
 
             conversation.append(li);
-            document.getElementById('action-wrapper').classList.add('open', 'conversation');
-            document.getElementById('action-wrapper').classList.remove('actions');
+            showConversation();
 
-            if (from === 'user') {
+            if (from === 'user' && !simulated) {
                 document.getElementById('action').value = '';
 
-                const item = addConversationItem({ from: 'ai', message: 'Hold on a second while I process this' });
+                const item = addConversationItem({
+                    from: 'ai',
+                    message: 'Hold on a second while I process this'
+                });
                 item.classList.add('lock');
                 conversation.classList.add('locked');
             }
@@ -1464,6 +1512,7 @@
                 case 'ArrowLeft': {
                     if (event.altKey) {
                         rpc.invoke({ cmd: 'back', options: future.options });
+                        closeActionsBox();
                     }
                     break;
                 }
@@ -1482,14 +1531,25 @@
                     if (!hasFocusableElementParent) {
                         const action = document.getElementById('action');
                         action.focus();
+
                     }
                 }
             }
         });
 
+        document.querySelector('main > .files-wrapper').addEventListener('scroll', e => {
+            closeActionsBox();
+        });
+
+        document.getElementById('action').addEventListener('keydown', e => {
+            if (document.getElementById('actions').children.length) {
+                showActionSuggestions();
+            }
+        });
+
         document.getElementById('action-submit').addEventListener('click', e => {
             document.getElementById('action-wrapper').classList.remove('actions');
-            document.getElementById('action-wrapper').classList.add('open', 'conversations');
+            document.getElementById('action-wrapper').classList.add('open', 'conversation');
         });
 
         document.getElementById('control-minimize').addEventListener('click', e => {

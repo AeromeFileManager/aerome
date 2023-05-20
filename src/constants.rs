@@ -156,7 +156,7 @@ fn install_prompts() {
 
     fs::create_dir_all(&prompts_dir).expect("Could not write to the apps data directory");
     fs::write(prompts_dir.join("./communicate.pr"), PROMPT_COMMUNICATE).unwrap();
-    fs::write(prompts_dir.join("./describe.pr"), PROMPT_COMMUNICATE).unwrap();
+    fs::write(prompts_dir.join("./summary.pr"), PROMPT_SUMMARY).unwrap();
 }
 
 fn install_icons() {

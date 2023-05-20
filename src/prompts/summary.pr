@@ -1,0 +1,12 @@
+summary
+    history: false
+    temperature: 0.5
+    description: >
+        Write a summary of this text that's less than five words long, prefer brevity
+        over clarity. Keep it less than five words at all costs. 
+{
+    match $AI {
+        (?:(?:summary:\s*)?((\w+\s*){1,5})) => `echo $1`,
+        (?s:.*) => $USER -> summary
+    }
+}

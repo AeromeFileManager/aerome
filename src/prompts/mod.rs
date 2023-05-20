@@ -1,2 +1,2 @@
 pub const PROMPT_COMMUNICATE: &'static [u8] = include_bytes!("./communicate.pr");
-pub const PROMPT_DESCRIBE: &'static [u8] = include_bytes!("./describe.pr");
+pub const PROMPT_SUMMARY: &'static [u8] = include_bytes!("./summary.pr");

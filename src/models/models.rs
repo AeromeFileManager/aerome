@@ -60,8 +60,9 @@ pub struct Suggestions {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Action {
-    pub title: String,
-    pub description: String
+    pub code: String,
+    pub description: Option<String>,
+    pub question: String
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -105,4 +106,29 @@ pub enum Sort {
     ZToA,
     #[serde(rename = "date")]
     Date,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationItem {
+    from: ConversationItemFrom,
+    pub message: Option<String>,
+    pub code: Option<String>
+}
+
+impl ConversationItem {
+    pub fn new(message: String, code: Option<String>) -> Self {
+        Self {
+            code,
+            from: ConversationItemFrom::Ai,
+            message: Some(message),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ConversationItemFrom {
+    Ai,
+    User
 }

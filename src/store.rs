@@ -14,13 +14,13 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-use std::fs;
 use dirs;
 use cozo::{self,Db,SqliteStorage,DataValue};
 use crate::constants::APP_NAME;
-use crate::models::{Account,AccountDirect,AccountAerome,Settings};
-use std::collections::BTreeMap;
+use crate::models::{Action,Account,AccountDirect,AccountAerome,Settings,Suggestions};
+use std::{fs,path::{PathBuf,Path},collections::BTreeMap};
 
+#[derive(Clone)]
 pub struct Store {
     db: Db<SqliteStorage>
 }
@@ -28,7 +28,8 @@ pub struct Store {
 impl Store {
     pub fn new() -> Self {
         let data_dir = dirs::data_dir().unwrap().join(APP_NAME);
-        let store_file = data_dir.join("store.db");
+        let db_file = if cfg!(test) { "store_test.db" } else { "store.db" };
+        let store_file = data_dir.join(db_file);
 
         if !data_dir.exists() {
             fs::create_dir_all(data_dir).unwrap();
@@ -36,8 +37,75 @@ impl Store {
 
         let store_exists = store_file.exists();
         let db = cozo::new_cozo_sqlite(store_file).expect("Could not create database store");
+        let _ = db.run_script(r#"
+            :create actions {
+                code: String,
+                path: String,
+                question: String,
+                description: String =>
+                inserted: Validity default 'ASSERT'
+            }
+        "#, Default::default());
 
         Store { db }
+    }
+
+    pub fn add_suggestion(&self, path: &Path, action: &Action) {
+        let params: BTreeMap<String, DataValue> = vec![
+            (String::from("code"), DataValue::Str(action.code.clone().into())),
+            (String::from("path"), DataValue::Str(path.to_str().unwrap().into())),
+            (String::from("question"), DataValue::Str(action.question.clone().into())),
+            (String::from("description"), DataValue::Str(action.description
+                .clone()
+                .unwrap_or_else(|| "".into())
+                .into()
+            ))
+        ].into_iter().collect();
+
+        let result = self.db.run_script("
+            ?[ code, path, question, description ] <- [
+                [ $code, $path, $question, $description ]
+            ]
+            :put actions {
+                code,
+                path,
+                question,
+                description
+            }
+        ", params).unwrap();
+    }
+
+    pub fn get_suggestions(&self, path: &Path) -> Suggestions {
+        let params: BTreeMap<String, DataValue> = vec![
+            (String::from("path"), DataValue::Str(path.to_str().unwrap().into())),
+        ].into_iter().collect();
+
+        let result = self.db.run_script("
+            ?[ code, description, path, question, inserted ] :=
+                *actions { code, description, path, question, inserted },
+                path == $path
+
+            :sort inserted
+        ", params).unwrap();
+
+        let actions = result.rows.into_iter()
+            .filter_map(|row| {
+                use DataValue::*;
+                match &row[..] {
+                    [ Str(code), Str(description), Str(path), Str(question), _ ] => Some(Action {
+                        code: (&**code).to_owned(),
+                        question: (&**question).to_owned(),
+                        description: Some((&**description).to_owned())
+                    }),
+                    _ => None
+                }
+            })
+            .collect();
+
+        Suggestions {
+            purpose: String::new(),
+            actions
+        }
     }
 
     pub fn set_account(&self, account: &Option<Account>) {
@@ -115,11 +183,32 @@ mod tests {
 
     #[test]
     #[serial]
+    fn settings_action() {
+        let store = Store::new();
+        let action = Action {
+            code: "some code".into(),
+            question: "How's it goin?".into(),
+            description: Some("humho".into())
+        };
+        let other = Action {
+            code: "some code".into(),
+            question: "How's it goin?".into(),
+            description: None
+        };
+
+        store.add_suggestion(&PathBuf::from("/foo/bar"), &action);
+        store.add_suggestion(&PathBuf::from("/foo/boo"), &other);
+
+        assert_eq!(1, store.get_suggestions(&PathBuf::from("/foo/bar")).actions.len());
+    }
+
+    #[test]
+    #[serial]
     fn settings_direct_account() {
         let store = Store::new();
         let direct = Account::Direct(AccountDirect("foobar".into()));
 
-        store.set_account(&direct);
+        store.set_account(&Some(direct.clone()));
 
         assert_eq!(store.get_settings(), Settings {
             account: Some(direct)
@@ -132,10 +221,11 @@ mod tests {
         let store = Store::new();
         let aerome = Account::Aerome(AccountAerome {
             key: "boobar".into(),
+            email: "humho@gmail.com".into(),
             active: false
         });
 
-        store.set_account(&aerome);
+        store.set_account(&Some(aerome.clone()));
 
         assert_eq!(store.get_settings(), Settings {
             account: Some(aerome)

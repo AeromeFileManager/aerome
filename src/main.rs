@@ -23,7 +23,7 @@ mod prompts;
 mod store;
 
 use ipc::*;
-use models::{Account,AccountDirect,AccountAerome,Suggestions,Folder,FolderListing,FileMetadata,FolderListingType,Options,Sort,Settings};
+use models::{Action,Account,AccountDirect,AccountAerome,ConversationItem,Suggestions,Folder,FolderListing,FileMetadata,FolderListingType,Options,Sort,Settings};
 use icons::Icons;
 use tokio::{runtime::{Runtime},process::Command};
 use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
@@ -174,11 +174,22 @@ fn main() -> wry::Result<()> {
                     communicate(&rt, &message, proxy.clone(), &unlocked.clone(), &account);
                 }
             },
-            Cmd::Evaluate { script, options } => {
+            Cmd::Evaluate { item, options } if item.code.is_some() => {
                 let mut unlocked = handler_folder.lock().unwrap();
-                let result = run_script_sync(format!("{script}\n echo -e {}", r#""\n""#), &unlocked.path);
+                let script = format!("{}\n echo -e {}",
+                    item.code.as_ref().unwrap(),
+                    r#""\n""#);
 
+                let result = run_script_sync(script, &unlocked.path);
                 *unlocked = get_folder(&unlocked.path, &options, &mime_db, &handler_thumbnails);
+
+                match (&result, item.message) {
+                    (Ok(_), Some(message)) => {
+                        maybe_add_suggestion(
+                            &rt, proxy.clone(), unlocked.path.clone(), message, item.code.unwrap());
+                    },
+                    _ => {}
+                }
 
                 proxy.send_event(UserEvent::UpdateFolder {
                     folder: (*unlocked).clone(),
@@ -291,15 +302,24 @@ fn main() -> wry::Result<()> {
 
             Event::UserEvent(UserEvent::UpdateFolder { folder, script_result }) => {
                 let stringified = serde_json::to_string(&folder).unwrap();
+                let suggestions = Store::new().get_suggestions(&folder.path);
+                let suggestions = serde_json::to_string(&suggestions).unwrap();
+
                 webview.evaluate_script(&format!("setFolder({})", &stringified)).unwrap();
 
-                if let Some(item) = script_result {
-                    if item.message.len() == 0 {
-                        webview.evaluate_script("closeActionsBox()").unwrap();
-                    } else {
-                        let item = serde_json::to_string(&item).unwrap();
+                match script_result {
+                    Some(result) if matches!(result.message, Some(_)) => {
+                        let item = serde_json::to_string(&result).unwrap();
                         webview.evaluate_script(&format!("addConversationItem({item})")).unwrap();
-                    }
+                    },
+                    Some(_) => {
+                        webview.evaluate_script("closeActionsBox()").unwrap();
+                    },
+                    _ => {}
+                }
+
+                if suggestions.len() > 0 {
+                    webview.evaluate_script(&format!("setSuggestions({suggestions})")).unwrap();
                 }
             },
 
@@ -391,6 +411,29 @@ fn communicate(
             "SUCCESS" => AiResponse::Success(message.to_string()),
             _ => AiResponse::Failure(message.to_string()),
         }));
+    });
+}
+
+fn maybe_add_suggestion(
+    rt: &Runtime,
+    proxy: EventLoopProxy<UserEvent>,
+    path: PathBuf,
+    message: String,
+    code: String)
+{
+    rt.spawn(async move {
+        let store = Store::new();
+        if let Some(account) = store.get_settings().account {
+            let description = Some(run_prompt("summary.pr", &message, &account).await);
+            store.add_suggestion(&path, &Action {
+                code,
+                description,
+                question: message
+            });
+            proxy.send_event(UserEvent::UpdateSuggestions {
+                description: store.get_suggestions(&path)
+            });
+        }
     });
 }
 

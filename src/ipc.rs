@@ -15,7 +15,7 @@
  */
 
 use serde::{Deserialize,Serialize};
-use crate::{Folder,FileMetadata,Suggestions,Options,Settings};
+use crate::{ConversationItem,Folder,FileMetadata,Suggestions,Options,Settings};
 use std::path::PathBuf;
 use url::Url;
 
@@ -44,7 +44,7 @@ pub enum Cmd {
         message: String
     },
     Evaluate {
-        script: String,
+        item: ConversationItem,
         options: Options
     },
     Window(WindowCmd),
@@ -82,24 +82,6 @@ pub enum UserEvent {
         path: String
     },
     Ai(AiResponse),
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConversationItem {
-    from: &'static str,
-    pub message: String,
-    pub code: Option<String>
-}
-
-impl ConversationItem {
-    pub fn new(message: String, code: Option<String>) -> Self {
-        Self {
-            code,
-            from: "ai",
-            message,
-        }
-    }
 }
 
 #[derive(Deserialize, Serialize)]
