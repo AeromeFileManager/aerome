@@ -17,6 +17,16 @@
 
 <base target="_blank" />
 <style>
+    * {
+        -webkit-user-select: none;
+        user-select: none;
+        cursor: default;
+    }
+
+    input[type="text"], [contenteditable] {
+        cursor: text;
+    }
+
     @keyframes open {
         0% { opacity: 0 }
         100% { opacity: 1 }
