@@ -143,6 +143,7 @@
         transition: all 0.2s ease-in-out;
         border-top-right-radius: 10px;
         border-top-left-radius: 10px;
+        z-index: 1;
 
         --header-height: 48px;
     }
@@ -328,6 +329,7 @@
         overflow-x: hidden;
         min-height: calc(100vh - 38px);
         max-height: calc(100vh - 38px);
+        position: relative;
     }
 
     .spacer {
@@ -368,23 +370,25 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(var(--grid-size), 1fr));
         grid-gap: 30px;
-        margin-bottom: var(--header-large-height);
-        margin-top: var(--header-large-height);
+        margin: 0;
+        padding: calc(10px + var(--header-large-height)) 10px;
     }
 
     ul#files > li {
         display: flex;
         flex-direction: column;
+        align-items: center;
         max-height: calc(var(--grid-size) - 20px);
         padding-bottom: 4px;
         transition: filter 0.15s ease-in-out;
     }
 
-    ul#files > li:hover img {
+    ul#files > li > .image:hover {
         filter: brightness(117%);
     }
 
     ul#files > li > .image {
+        max-width: 80%;
         min-height: calc(var(--grid-size) - 40px);
         max-height: calc(var(--grid-size) - 40px);
         object-fit: contain;
@@ -997,6 +1001,12 @@
     #folder-context-menu ul li span {
         cursor: default;
     }
+
+    #dnd-visual-box {
+        position: absolute;
+        pointer-events: none;
+        background: var(--secondary-pop-semi-transparent);
+    }
 </style>
 <body>
     <div id="sign-up" style="display: none">
@@ -1220,6 +1230,7 @@
         <div class="files-wrapper">
             <ul id="files"></ul>
             <div id="file-deep-look"></div>
+            <div id="dnd-visual-box"></div>
         </div>
 
         <div class="spacer" aria-hidden=true></div>
@@ -1256,8 +1267,7 @@
         </ul>
     </div>
 
-    <div id="files-context-menu" inert aria-hidden=true>
-    </div>
+    <div id="files-context-menu" inert aria-hidden=true></div>
 
     <script>
         const ACCOUNTS_SERVER = new URL('http://localhost:9008');
@@ -2232,6 +2242,88 @@
                 case 'Paste': break;
                 case 'Select All': break;
                 case 'Inspect': break;
+            }
+        });
+
+        document.getElementById('files').addEventListener('pointerdown', e => {
+            if (e.target.id !== 'files' && !e.target.matches('li')) return;
+
+            const filesEl = e.target.closest('#files');
+            const scrollEl = filesEl.parentElement;
+            const boxEl = document.getElementById('dnd-visual-box');
+
+            const startX = e.pageX;
+            const startY = e.pageY;
+            const startScroll = scrollEl.scrollTop;
+            const startScrollHeight = scrollEl.scrollHeight;
+            const scrollViewportHeight = scrollEl.getBoundingClientRect().height;
+
+            let scrollOffset = 0;
+            let pageX = 0, pageY = 0;
+
+            filesEl.setPointerCapture(e.pointerId);
+
+            const startTop = e.pageY + startScroll;
+
+            boxEl.style.left = `${e.pageX}px`;
+            boxEl.style.top = `${e.pageY + startScroll}px`;
+            boxEl.style.width = '0px';
+            boxEl.style.height = '0px';
+            boxEl.style.opacity = 1;
+
+            filesEl.addEventListener('pointermove', onMove);
+            filesEl.addEventListener('pointerup', onUp);
+            scrollEl.addEventListener('scroll', onScroll);
+
+            function moveBox(cancel) {
+                const differenceX = pageX - startX;
+                const differenceY = pageY - startY + scrollOffset;
+
+                if (differenceY > 0 && startTop + differenceY + 20 > startScrollHeight) {
+                    cancel();
+                    return;
+                }
+
+                if (differenceX < 0) {
+                    boxEl.style.left = pageX + 'px';
+                }
+
+                let top;
+                if (differenceY < 0) {
+                    top = scrollOffset >= 0
+                        ? pageY + startScroll
+                        : pageY + startScroll + scrollOffset;
+
+                    boxEl.style.top = top + 'px';
+                }
+                boxEl.style.width = `${Math.abs(differenceX)}px`;
+                boxEl.style.height = `${Math.abs(differenceY)}px`;
+            }
+
+            function onScroll(e) {
+                scrollOffset = scrollEl.scrollTop - startScroll;
+                moveBox(() => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+            }
+
+            function onMove(e) {
+                pageX = e.pageX;
+                pageY = e.pageY;
+                moveBox(() => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+            }
+
+            function onUp(e) {
+                boxEl.style.opacity = 0;
+                filesEl.releasePointerCapture(e.pointerId);
+                filesEl.removeEventListener('pointermove', onMove);
+                filesEl.removeEventListener('pointerup', onUp);
+                scrollEl.removeEventListener('scroll', onScroll);
+                scrollEl.scrollTo({ left: 0, behavior: 'smooth' });
             }
         });
 
