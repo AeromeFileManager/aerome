@@ -369,9 +369,8 @@
 
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(var(--grid-size), 1fr));
-        grid-gap: 30px;
         margin: 0;
-        padding: calc(10px + var(--header-large-height)) 10px;
+        padding: calc(10px + var(--header-large-height)) 0;
     }
 
     ul#files > li {
@@ -380,7 +379,14 @@
         align-items: center;
         max-height: calc(var(--grid-size) - 20px);
         padding-bottom: 4px;
-        transition: filter 0.15s ease-in-out;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 10px;
+        transition: filter 0.15s ease-in-out, background 0.24s ease-in-out;
+    }
+
+    ul#files > li.selected {
+        background: var(--secondary-fg-semi-transparent);
     }
 
     ul#files > li > .image:hover {
@@ -2256,24 +2262,79 @@
             const startY = e.pageY;
             const startScroll = scrollEl.scrollTop;
             const startScrollHeight = scrollEl.scrollHeight;
-            const scrollViewportHeight = scrollEl.getBoundingClientRect().height;
+            const startTop = e.pageY + startScroll;
+            const childBoxSize = filesEl.children[0]?.getBoundingClientRect();
+
+            if (!childBoxSize) {
+                // Empty folder
+                return;
+            }
+            const childStyle = getComputedStyle(filesEl.children[0]);
+            const childWidth =
+                parseFloat(childStyle.width) +
+                (parseFloat(childStyle.paddingLeft) || 0) +
+                (parseFloat(childStyle.paddingRight) || 0) +
+                (parseFloat(childStyle.marginLeft) || 0) +
+                (parseFloat(childStyle.marginRight) || 0);
+            const childHeight =
+                parseFloat(childStyle.height) +
+                (parseFloat(childStyle.paddingTop) || 0) +
+                (parseFloat(childStyle.paddingBottom) || 0) +
+                (parseFloat(childStyle.marginTop) || 0) +
+                (parseFloat(childStyle.marginBottom) || 0);
+
+            let childRowSize = 0;
+            for (const child of filesEl.children) {
+                let rect = child.getBoundingClientRect();
+                if (rect.top !== childBoxSize.top) {
+                    break;
+                }
+                childRowSize += 1;
+            }
 
             let scrollOffset = 0;
             let pageX = 0, pageY = 0;
-
-            filesEl.setPointerCapture(e.pointerId);
-
-            const startTop = e.pageY + startScroll;
 
             boxEl.style.left = `${e.pageX}px`;
             boxEl.style.top = `${e.pageY + startScroll}px`;
             boxEl.style.width = '0px';
             boxEl.style.height = '0px';
             boxEl.style.opacity = 1;
+            const intervalId = setInterval(highlightIntersections, 100);
 
+            filesEl.setPointerCapture(e.pointerId);
             filesEl.addEventListener('pointermove', onMove);
             filesEl.addEventListener('pointerup', onUp);
             scrollEl.addEventListener('scroll', onScroll);
+
+            function highlightIntersections() {
+                const x1 = parseInt(boxEl.style.left);
+                const x2 = parseInt(boxEl.style.width) + x1;
+
+                const rowX1Offset = Math.floor(x1 / childWidth);
+                const rowX2Offset = Math.floor(x2 / childWidth);
+
+                const y1 = parseInt(boxEl.style.top);
+                const y2 = parseInt(boxEl.style.height) + y1;
+                const boxTotalHeight = childBoxSize.height + childBoxSize.top;
+
+                const rowY1Offset = Math.floor(y1 / childHeight);
+                const rowY2Offset = Math.floor(y2 / childHeight) + 1;
+
+                const startOffset = rowY1Offset * childRowSize;
+                const endOffset = rowY2Offset * childRowSize;
+
+                for (let i = 0; i < filesEl.children.length; i++) {
+                    const isWithinBoxStart = i % childRowSize >= rowX1Offset;
+                    const isWithinBoxEnd = i % childRowSize <= rowX2Offset;
+
+                    if (isWithinBoxStart && isWithinBoxEnd && i >= startOffset && i < endOffset) {
+                        filesEl.children[i].classList.add('selected');
+                    } else {
+                        filesEl.children[i].classList.remove('selected');
+                    }
+                }
+            }
 
             function moveBox(cancel) {
                 const differenceX = pageX - startX;
@@ -2288,13 +2349,10 @@
                     boxEl.style.left = pageX + 'px';
                 }
 
-                let top;
                 if (differenceY < 0) {
-                    top = scrollOffset >= 0
-                        ? pageY + startScroll
-                        : pageY + startScroll + scrollOffset;
-
-                    boxEl.style.top = top + 'px';
+                    boxEl.style.top = scrollOffset >= 0
+                        ? `${pageY + startScroll}px`
+                        : `${pageY + startScroll + scrollOffset}px`;
                 }
                 boxEl.style.width = `${Math.abs(differenceX)}px`;
                 boxEl.style.height = `${Math.abs(differenceY)}px`;
@@ -2324,6 +2382,7 @@
                 filesEl.removeEventListener('pointerup', onUp);
                 scrollEl.removeEventListener('scroll', onScroll);
                 scrollEl.scrollTo({ left: 0, behavior: 'smooth' });
+                clearInterval(intervalId);
             }
         });
 
