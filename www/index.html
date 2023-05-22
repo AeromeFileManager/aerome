@@ -2233,11 +2233,7 @@
             if (e.target.closest('#folder-context-menu, #files-context-menu')) {
                 return
             }
-
-            const menu = document.getElementById('folder-context-menu');
-
-            menu.setAttribute('aria-hidden', true);
-            menu.setAttribute('inert', true);
+            hideContextMenus();
         });
 
         document.getElementById('folder-context-menu').addEventListener('click', e => {
@@ -2246,10 +2242,26 @@
                 case 'New Folder': break;
                 case 'New Document': break;
                 case 'Paste': break;
-                case 'Select All': break;
+                case 'Select All': {
+                    for (const file of document.getElementById('files').children) {
+                        file.classList.add('selected');
+                    }
+                    hideContextMenus();
+                    break;
+                };
                 case 'Inspect': break;
             }
         });
+
+        function hideContextMenus() {
+            const folder = document.getElementById('folder-context-menu');
+            const files = document.getElementById('files-context-menu');
+
+            folder.setAttribute('aria-hidden', true);
+            folder.setAttribute('inert', true);
+            files.setAttribute('aria-hidden', true);
+            files.setAttribute('inert', true);
+        }
 
         document.getElementById('files').addEventListener('pointerdown', e => {
             if (e.target.id !== 'files' && !e.target.matches('li')) return;
