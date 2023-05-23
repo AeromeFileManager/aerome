@@ -21,8 +21,10 @@ mod icons;
 mod thumbnails;
 mod prompts;
 mod store;
+mod file_transfer;
 
 use ipc::*;
+use file_transfer::{FileTransferService};
 use models::{Action,Account,AccountDirect,AccountAerome,ConversationItem,Suggestions,Folder,FolderListing,FileMetadata,FolderListingType,Options,Sort,Settings};
 use icons::Icons;
 use tokio::{runtime::{Runtime},process::Command};
@@ -78,6 +80,7 @@ fn main() -> wry::Result<()> {
     let proxy = event_loop.create_proxy();
     let rt = Runtime::new().unwrap();
     let theme = Icons::get_current_theme_name();
+    let file_transfer = FileTransferService::new(proxy.clone());
 
     let handler_folder = folder.clone();
     let handler_thumbnails = thumbnails.clone();
@@ -161,6 +164,10 @@ fn main() -> wry::Result<()> {
                         script_result: None
                     });
                 }
+            },
+            Cmd::FileTransfer(cmd) => match cmd {
+                FileTransferCmd::Start(start) => file_transfer.enqueue(start),
+                FileTransferCmd::Resume(resume) => file_transfer.update(resume)
             },
             Cmd::Window(WindowCmd::Drag) => {
                 let _ = window.drag_window();
@@ -296,6 +303,11 @@ fn main() -> wry::Result<()> {
             Event::UserEvent(UserEvent::NonexistentFolder { path }) => {
                 let stringified = serde_json::to_string(&json!({ "path": path })).unwrap();
                 webview.evaluate_script(&format!("setMissingFolder({})", &stringified)).unwrap();
+            },
+
+            Event::UserEvent(UserEvent::FileTransferProgress(progress)) => {
+                let stringified = serde_json::to_string(&progress).unwrap();
+                webview.evaluate_script(&format!("notifyFileTransferProgress({})", &stringified)).unwrap();
             },
     
             Event::UserEvent(UserEvent::UpdateThumbnail { thumbnail }) => {

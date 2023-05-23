@@ -108,7 +108,7 @@ pub enum Sort {
     Date,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationItem {
     from: ConversationItemFrom,
@@ -126,7 +126,7 @@ impl ConversationItem {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 enum ConversationItemFrom {
     Ai,

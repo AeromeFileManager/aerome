@@ -16,11 +16,14 @@
 
 use serde::{Deserialize,Serialize};
 use crate::{ConversationItem,Folder,FileMetadata,Suggestions,Options,Settings};
-use std::path::PathBuf;
+use fs_extra::TransitProcess;
+use fs_extra::dir::{TransitState,TransitProcessResult};
+
+use std::path::{PathBuf};
 use url::Url;
 
-#[derive(Deserialize, Serialize)]
-#[serde(tag = "cmd", rename_all = "camelCase")]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum Cmd {
     /// Show developer tools in when not in production
     Dev,
@@ -36,6 +39,7 @@ pub enum Cmd {
         to: String,
         options: Options
     },
+    FileTransfer(FileTransferCmd),
     Options {
         options: Options
     },
@@ -52,8 +56,8 @@ pub enum Cmd {
     Window(WindowCmd),
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(tag = "window", rename_all = "camelCase")]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "window", rename_all = "lowercase")]
 pub enum WindowCmd {
     Close,
     Drag,
@@ -61,10 +65,100 @@ pub enum WindowCmd {
     Minimize
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FileTransferCmd {
+    Start(FileTransferCmdStart),
+    Resume(FileTransferCmdResponse)
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FileTransferCmdStart {
+    Copy {
+        parent: PathBuf,
+        names: Vec<String>,
+        to: PathBuf
+    },
+    Cut {
+        parent: PathBuf,
+        names: Vec<String>,
+        to: PathBuf
+    }
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(tag="action", rename_all = "snake_case")]
+pub enum FileTransferCmdResponse {
+    Overwrite,
+    OverwriteAll,
+    Skip,
+    SkipAll,
+    Retry,
+    #[default]
+    Abort,
+    ContinueOrAbort,
+}
+
+impl From<FileTransferCmdResponse> for TransitProcessResult {
+    fn from(ftcr: FileTransferCmdResponse) -> Self {
+        match ftcr {
+            FileTransferCmdResponse::Overwrite => TransitProcessResult::Overwrite,
+            FileTransferCmdResponse::OverwriteAll => TransitProcessResult::OverwriteAll,
+            FileTransferCmdResponse::Skip => TransitProcessResult::Skip,
+            FileTransferCmdResponse::SkipAll => TransitProcessResult::SkipAll,
+            FileTransferCmdResponse::Retry => TransitProcessResult::Retry,
+            FileTransferCmdResponse::Abort => TransitProcessResult::Abort,
+            FileTransferCmdResponse::ContinueOrAbort => TransitProcessResult::ContinueOrAbort
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileTransferProgress {
+    pub copied_bytes: u64,
+    pub total_bytes: u64,
+    pub file_bytes_copied: u64,
+    pub file_total_bytes: u64,
+    pub file_name: String,
+    pub dir_name: String,
+    pub state: FileTransferProgressState,
+}
+
+impl From<TransitProcess> for FileTransferProgress {
+    fn from(p: TransitProcess) -> Self {
+        Self {
+            copied_bytes: p.copied_bytes,
+            total_bytes: p.total_bytes,
+            file_bytes_copied: p.file_bytes_copied,
+            file_total_bytes: p.file_total_bytes,
+            file_name: p.file_name,
+            dir_name: p.dir_name,
+            state: match p.state {
+                TransitState::Normal => FileTransferProgressState::Normal,
+                TransitState::Exists => FileTransferProgressState::Exists,
+                TransitState::NoAccess => FileTransferProgressState::NoAccess,
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FileTransferProgressState {
+    #[default]
+    Normal,
+    Exists,
+    NoAccess,
+}
+
+#[derive(Debug)]
 pub enum UserEvent {
     CloseWindow,
     DevTools,
     ExecEval(),
+    FileTransferProgress(FileTransferProgress),
     UpdateFileDeepLook {
         file: FileMetadata
     },
@@ -87,14 +181,14 @@ pub enum UserEvent {
     Ai(AiResponse),
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThumbnailUpdate {
     pub name: String,
     pub url: Url
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "response", rename_all = "camelCase")]
 pub enum AiResponse {
     Failure(String),

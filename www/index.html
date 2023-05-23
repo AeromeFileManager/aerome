@@ -949,7 +949,7 @@
         width: 48%;
     }
 
-    #folder-context-menu {
+    .contextmenu {
         opacity: 0;
         pointer-events: none;
 
@@ -971,19 +971,19 @@
         box-shadow: 2px 2px 10px 2px var(--color-dim-gray);
     }
 
-    #folder-context-menu:not([aria-hidden]) {
+    .contextmenu:not([aria-hidden]) {
         opacity: 1;
         pointer-events: all;
     }
 
-    #folder-context-menu .divider {
+    .contextmenu .divider {
         width: 100%;
         height: 1px;
         background: var(--secondary-fg);
         margin: 4px 0;
     }
 
-    #folder-context-menu ul {
+    .contextmenu ul {
         display: flex;
         flex-direction: column;
         flex: 1;
@@ -991,20 +991,20 @@
         margin: 0;
     }
 
-    #folder-context-menu ul li {
+    .contextmenu ul li {
         padding: 0 8px;
     }
 
-    #folder-context-menu ul li.disabled {
+    .contextmenu ul li.disabled {
         color: var(--secondary-fg-semi-transparent);
     }
 
-    #folder-context-menu ul li:not(.disabled):hover {
+    .contextmenu ul li:not(.disabled):hover {
         background: var(--primary-bg-semi-transparent);
         color: var(--primary-fg);
     }
 
-    #folder-context-menu ul li span {
+    .contextmenu ul li span {
         cursor: default;
     }
 
@@ -1257,14 +1257,14 @@
         </div>
     </main>
 
-    <div id="folder-context-menu" inert aria-hidden=true>
+    <div id="folder-context-menu" inert aria-hidden=true class="contextmenu">
         <ul tabindex="-1">
             <li><span>New Folder</span></li>
             <li><span>New Document</span></li>
 
             <div class="divider" aria-hidden=true></div>
 
-            <li class="disabled"><span>Paste</span></li>
+            <li class="paste disabled"><span>Paste</span></li>
             <li><span>Select All</span></li>
 
             <div class="divider" aria-hidden="true"></div>
@@ -1273,7 +1273,20 @@
         </ul>
     </div>
 
-    <div id="files-context-menu" inert aria-hidden=true></div>
+    <div id="files-context-menu" inert aria-hidden=true class="contextmenu">
+        <ul>
+            <li><span>Cut</span></li>
+            <li><span>Copy</span></li>
+            <li class="single-only"><span>Rename</span></li>
+            <div class="divider" aria-hidden="true"></div>
+            <li><span>Send To</span></li>
+            <li><span>Compress</span></li>
+            <div class="divider" aria-hidden="true"></div>
+            <li><span>Trash</span></li>
+            <div class="divider" aria-hidden="true"></div>
+            <li><span>Inspect</span></li>
+        </ul>
+    </div>
 
     <script>
         const ACCOUNTS_SERVER = new URL('http://localhost:9008');
@@ -1415,6 +1428,8 @@
             resetFolder(path);
             document.getElementById('file-deep-look').classList.remove('error');
 
+            filesEl._path = path;
+
             for (const file of files) {
                 const li = document.createElement('li');
                 const span = document.createElement('span');
@@ -1432,6 +1447,7 @@
 
                 span.textContent = file.name;
                 li.id = `file-${encodeFilenameToId(file.name)}`;
+                li._name = file.name;
                 li.append(span);
 
                 filesEl.append(li);
@@ -1560,6 +1576,21 @@
                 'actions',
                 'conversation'
             );
+        };
+
+        window.notifyFileTransferProgress = progress => {
+            switch (progress.state) {
+                case 'normal': {
+                    rpc.invoke({
+                        cmd: 'file_transfer',
+                        resume: {
+                            action: 'continue_or_abort'
+                        }
+                    })
+                    break;
+                }
+            }
+            console.log(progress);
         };
 
         function resetFolder(path) {
@@ -2216,17 +2247,13 @@
                 return
             }
 
-            const menu = document.getElementById('folder-context-menu');
-            const menuDimensions = menu.getBoundingClientRect();
+            const hasSelectedFiles = document.getElementById('files').querySelector('.selected');
+            if (hasSelectedFiles) {
+                showContextMenu('files-context-menu', e);
+            } else {
+                showFolderContextMenu(e);
+            }
 
-            const x = Math.min(e.x, window.innerWidth - menuDimensions.width - 6);
-            const y = Math.min(e.y, window.innerHeight - menuDimensions.height - 6);
-
-            menu.style.left = x + 'px';
-            menu.style.top = y + 'px';
-
-            menu.removeAttribute('aria-hidden');
-            menu.removeAttribute('inert');
         });
 
         document.addEventListener('click', e => {
@@ -2241,7 +2268,21 @@
             switch (e.target.textContent) {
                 case 'New Folder': break;
                 case 'New Document': break;
-                case 'Paste': break;
+                case 'Paste': {
+                    if (filesSelection.kind) {
+                        rpc.invoke({
+                            cmd: 'file_transfer',
+                            start: {
+                                [filesSelection.kind]: {
+                                    to: document.getElementById('files')._path,
+                                    parent: filesSelection.folder,
+                                    names: filesSelection.selected
+                                }
+                            }
+                        });
+                    }
+                    break;
+                }
                 case 'Select All': {
                     for (const file of document.getElementById('files').children) {
                         file.classList.add('selected');
@@ -2252,6 +2293,51 @@
                 case 'Inspect': break;
             }
         });
+
+        let filesSelection = {
+            kind: '',
+            folder: '',
+            selected: []
+        };
+
+        document.getElementById('files-context-menu').addEventListener('click', e => {
+            switch (e.target.textContent) {
+                case 'Copy':
+                case 'Cut': {
+                    filesSelection = {
+                        kind: e.target.textContent.toLowerCase(),
+                        folder: document.getElementById('files')._path,
+                        selected: [ ...document.querySelectorAll('#files > .selected') ]
+                            .map(el => el._name)
+                    };
+                    hideContextMenus();
+                    break;
+                }
+            }
+        });
+
+        function showFolderContextMenu(coords) {
+            const folderMenu = document.getElementById('folder-context-menu');
+
+            if (filesSelection.selected.length) {
+                folderMenu.querySelector('.paste').classList.remove('disabled');
+            } else {
+                folderMenu.querySelector('.paste').classList.add('disabled');
+            }
+
+            showContextMenu('folder-context-menu', coords);
+        }
+
+        function showContextMenu(id, { x, y }) {
+            const menu = document.getElementById(id);
+            const menuDimensions = menu.getBoundingClientRect();
+
+            menu.style.left = `${Math.min(x, window.innerWidth - menuDimensions.width - 6)}px`;
+            menu.style.top = `${Math.min(y, window.innerHeight - menuDimensions.height - 6)}px`;
+
+            menu.removeAttribute('aria-hidden');
+            menu.removeAttribute('inert');
+        }
 
         function hideContextMenus() {
             const folder = document.getElementById('folder-context-menu');
