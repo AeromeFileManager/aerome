@@ -61,13 +61,20 @@ impl FileTransferService {
         let running = self.running.clone();
 
         thread::spawn(move || {
-            while let Some(cmd) = queue.lock().unwrap().pop_front() {
-                let proxy = proxy.clone();
-                let (sender, receiver) = mpsc::channel::<FileTransferCmdResponse>();
-                let handle = spawn_file_transfer(cmd, receiver, proxy);
-
-                running.lock().unwrap().replace(Transfer(sender));
-                handle.join().unwrap();
+            loop {
+                let next = queue.lock().unwrap().pop_front();
+                match next {
+                    Some(cmd) => {
+                        let proxy = proxy.clone();
+                        let (sender, receiver) = mpsc::channel::<FileTransferCmdResponse>();
+                        let handle = spawn_file_transfer(cmd, receiver, proxy);
+                        running.lock().unwrap().replace(Transfer(sender));
+                        handle.join().unwrap();
+                    },
+                    None => {
+                        break;
+                    }
+                }
             }
             *running.lock().unwrap() = None;
         });
