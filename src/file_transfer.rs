@@ -19,8 +19,9 @@ use std::sync::{Arc,Mutex};
 use std::thread::{self,JoinHandle};
 use wry::application::event_loop::{EventLoopProxy};
 use fs_extra::{move_items_with_progress, copy_items_with_progress, dir::{CopyOptions,TransitProcessResult}};
-use crate::{FileTransferCmd,FileTransferCmdStart,FileTransferCmdResponse,FileTransferProgress,UserEvent};
+use crate::{FileTransfer,FileTransferKind,FileTransferCmd,FileTransferCmdStart,FileTransferCmdResponse,FileTransferProgress,FileTransferProgressState,UserEvent};
 use std::collections::VecDeque;
+use log;
 
 pub struct FileTransferService {
     proxy: EventLoopProxy<UserEvent>,
@@ -40,19 +41,23 @@ impl FileTransferService {
     }
 
     pub fn enqueue(&self, cmd: FileTransferCmdStart) {
+        log::trace!("File transfer queued -> {cmd:#?}");
         self.queue.lock().unwrap().push_back(cmd);
         self.drain();
     }
 
     pub fn update(&self, response: FileTransferCmdResponse) {
+        log::trace!("File transfer update -> {response:#?}");
+
         match self.running.lock().unwrap().as_mut() {
             Some(Transfer(sender)) => sender.send(response).unwrap(),
-            _ => {}
+            _ => log::error!("File transfer update doesn't have a transfer target")
         }
     }
 
     fn drain(&self) {
         if self.running.lock().unwrap().is_some() {
+            log::trace!("File transfer already running");
             return;
         }
 
@@ -61,6 +66,7 @@ impl FileTransferService {
         let running = self.running.clone();
 
         thread::spawn(move || {
+            log::trace!("File transfer starting");
             loop {
                 let next = queue.lock().unwrap().pop_front();
                 match next {
@@ -70,6 +76,7 @@ impl FileTransferService {
                         let handle = spawn_file_transfer(cmd, receiver, proxy);
                         running.lock().unwrap().replace(Transfer(sender));
                         handle.join().unwrap();
+                        log::trace!("File transfer finished");
                     },
                     None => {
                         break;
@@ -88,28 +95,30 @@ fn spawn_file_transfer(
 {
     let options = CopyOptions::default();
 
-    thread::spawn(move || match cmd {
-        FileTransferCmdStart::Copy { parent, names, to } => {
-            let from: Vec<_> = names.into_iter().map(|name| parent.join(name)).collect();
+    thread::spawn(move || {
+        let from: Vec<_> = cmd.names.into_iter().map(|name| cmd.parent.join(name)).collect();
+        let mut file_transfer = FileTransfer {
+            state: Default::default(),
+            progress: Default::default(),
+            from: cmd.parent,
+            to: cmd.to.clone(),
+            kind: cmd.kind
+        };
 
-            copy_items_with_progress(&from, &to, &options, move |progress| {
-                let event =
-                    UserEvent::FileTransferProgress(FileTransferProgress::from(progress));
+        let on_progress = |progress: fs_extra::TransitProcess| {
+            file_transfer.state = progress.state.clone().into();
+            file_transfer.progress = progress.into();
+            proxy.send_event(UserEvent::FileTransferProgress(file_transfer.clone())).unwrap();
+            rec.recv().unwrap().into()
+        };
 
-                proxy.send_event(event).unwrap();
-                rec.recv().unwrap().into()
-            }).unwrap();
-        },
-        FileTransferCmdStart::Cut { parent, names, to } => {
-            let from: Vec<_> = names.into_iter().map(|name| parent.join(name)).collect();
+        // This will return an error when a user cancels, so we ignore it for now
+        let _ = match cmd.kind {
+            FileTransferKind::Cut => move_items_with_progress(&from, &cmd.to, &options, on_progress),
+            FileTransferKind::Copy => copy_items_with_progress(&from, &cmd.to, &options, on_progress),
+        };
 
-            move_items_with_progress(&from, &to, &options, move |progress| {
-                let event =
-                    UserEvent::FileTransferProgress(FileTransferProgress::from(progress));
-
-                proxy.send_event(event).unwrap();
-                rec.recv().unwrap().into()
-            }).unwrap();
-        }
+        file_transfer.state = FileTransferProgressState::Finished;
+        proxy.send_event(UserEvent::FileTransferProgress(file_transfer)).unwrap();
     })
 }

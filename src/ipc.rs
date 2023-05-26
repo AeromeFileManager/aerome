@@ -74,17 +74,19 @@ pub enum FileTransferCmd {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum FileTransferCmdStart {
-    Copy {
-        parent: PathBuf,
-        names: Vec<String>,
-        to: PathBuf
-    },
-    Cut {
-        parent: PathBuf,
-        names: Vec<String>,
-        to: PathBuf
-    }
+pub struct FileTransferCmdStart {
+    pub parent: PathBuf,
+    pub names: Vec<String>,
+    pub to: PathBuf,
+    pub kind: FileTransferKind
+}
+
+#[derive(Copy, Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileTransferKind {
+    Cut,
+    #[default]
+    Copy
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -114,7 +116,17 @@ impl From<FileTransferCmdResponse> for TransitProcessResult {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileTransfer {
+    pub progress: FileTransferProgress,
+    pub from: PathBuf,
+    pub to: PathBuf,
+    pub state: FileTransferProgressState,
+    pub kind: FileTransferKind
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileTransferProgress {
     pub copied_bytes: u64,
@@ -123,7 +135,6 @@ pub struct FileTransferProgress {
     pub file_total_bytes: u64,
     pub file_name: String,
     pub dir_name: String,
-    pub state: FileTransferProgressState,
 }
 
 impl From<TransitProcess> for FileTransferProgress {
@@ -135,22 +146,28 @@ impl From<TransitProcess> for FileTransferProgress {
             file_total_bytes: p.file_total_bytes,
             file_name: p.file_name,
             dir_name: p.dir_name,
-            state: match p.state {
-                TransitState::Normal => FileTransferProgressState::Normal,
-                TransitState::Exists => FileTransferProgressState::Exists,
-                TransitState::NoAccess => FileTransferProgressState::NoAccess,
-            }
         }
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FileTransferProgressState {
     #[default]
     Normal,
     Exists,
     NoAccess,
+    Finished
+}
+
+impl From<TransitState> for FileTransferProgressState {
+    fn from(s: TransitState) -> Self {
+        match s {
+            TransitState::Normal => Self::Normal,
+            TransitState::Exists => Self::Exists,
+            TransitState::NoAccess => Self::NoAccess,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -158,7 +175,7 @@ pub enum UserEvent {
     CloseWindow,
     DevTools,
     ExecEval(),
-    FileTransferProgress(FileTransferProgress),
+    FileTransferProgress(FileTransfer),
     UpdateFileDeepLook {
         file: FileMetadata
     },

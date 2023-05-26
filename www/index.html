@@ -1024,12 +1024,18 @@
         border-radius: 2px;
         border: 2px solid var(--secondary-bg);
         --percentage: 36%;
+        transition: opacity 0.2s ease-in-out;
         background: linear-gradient(
             0deg,
             var(--primary-fg) var(--percentage),
             var(--primary-fg) var(--percentage),
             rgba(255,255,255,0) var(--percentage),
             rgba(250,250,250,0) 100%);
+    }
+
+    #file-transfer-menu-icon:not(.showing) {
+        opacity: 0;
+        pointer-events: none;
     }
 
     #file-transfer-popup {
@@ -1063,17 +1069,57 @@
         color: var(--secondary-fg);
     }
 
-    #file-transfer-popup > .information > h2 {
+    #file-transfer-popup > .information > .current {
+        display: none;
+        flex-direction: column;
+        flex: 1;
+        margin: 10px 0;
+    }
+
+    #file-transfer-popup > .information > .current.showing {
+        display: flex;
+    }
+
+    #file-transfer-popup > .information > .current > h2 {
         text-align: center;
     }
 
-    #file-transfer-popup > .information > h3 {
+    #file-transfer-popup > .information > .current > h3 {
         margin: 0;
         font-size: 12px;
     }
 
-    #file-transfer-popup > .information > p {
+    #file-transfer-popup > .information > .current > p {
         margin: 12px;
+    }
+
+    #file-transfer-popup > .information > .buttons {
+        display: flex;
+        transition: all ease-in-out 0.3s;
+    }
+
+    #file-transfer-popup > .information > .buttons > button {
+        flex: 1;
+        margin: 0 4px;
+    }
+
+    #file-transfer-popup > .information > .buttons > button.extra {
+        flex: 0;
+        min-width: 0;
+        flex-shrink: 0;
+        max-width: 0;
+        padding: 0;
+        margin: 0;
+        border: 0;
+    }
+
+    #file-transfer-popup > .information > .buttons.show-extra > button.extra {
+        flex: 1;
+        min-width: unset;
+        max-width: unset;
+        padding: unset;
+        margin: 0 4px;
+        border: 0.1px solid var(--secondary-fg);
     }
 </style>
 <body>
@@ -1286,19 +1332,23 @@
                         aria-label="File transfer progress"></progress>
 
                     <div class="information">
+                        <h2 class="name"></h2>
+
+                        <div class="current">
+                            <h3>From</h3>
+                            <p class="from"></p>
+
+                            <h3>To</h3>
+                            <p class="to"></p>
+                        </div>
+
+                        <div class="buttons">
+                            <button class="extra">Retry</button>
+                            <button class="extra">Skip</button>
+                            <button class="extra">Overwrite</button>
+                            <button>Cancel</button>
+                        </div>
                     </div>
-
-                    <template>
-                        <h2>$NAME</h2>
-
-                        <h3>From</h3>
-                        <p class="from"></p>
-
-                        <h3>To</h3>
-                        <p class="to"></p>
-
-                        <button>Cancel</button>
-                    </template>
                 </div>
 
                 <div class="tap-area" aria-hidden=true></div>
@@ -1681,10 +1731,10 @@
                         <h2>$NAME</h2>
 
                         <h3>From</h3>
-                        <p class="from"></p>
+                        <p class="from">$FILENAME</p>
 
                         <h3>To</h3>
-                        <p class="to"></p>
+                        <p class="to">$</p>
 
                         <button>Cancel</button>
                     </template>
@@ -1695,35 +1745,87 @@
             selected: []
         };
                     */
-        window.notifyFileTransferProgress = progress => {
-            switch (progress.state) {
+        window.notifyFileTransferProgress = ({ progress, from, to, state }) => {
+            const fileTransferIconEl = document.getElementById('file-transfer-menu-icon');
+            const fileTransferEl = document.getElementById('file-transfer-popup');
+            const informationEl = fileTransferEl.querySelector('.information');
+            const { folder } = filesSelection;
+
+            informationEl.querySelector('.from').textContent = `${from}/${progress.fileName}`;
+            informationEl.querySelector('.to').textContent = `${to}/${progress.fileName}`;
+            informationEl.querySelector('.current').classList.add('showing');
+            informationEl.querySelector('button:last-child').textContent = 'Cancel';
+
+            const percentage = progress.copiedBytes / progress.totalBytes;
+            fileTransferIconEl.style.setProperty('--percentage', `${percentage * 100}%`);
+            fileTransferEl.querySelector('progress').value = percentage;
+
+            switch (state) {
                 case 'normal': {
-                    const fileTransferEl = document.getElementById('file-transfer-popup');
-                    const information = fileTransferEl.querySelector('template').content.cloneNode(true);
-                        // FIXME: I need to send more than just the progress here it doesn't have the "to"
-
-                    information.querySelector('h2').textContent = 'Copy';
-                    information.querySelector('.from').textContent =
-                        `${filesSelection.folder}/${progress.fileName}`;
-                    information.querySelector('.to').textContent =
-                        `${filesSelection.folder}/${progress.fileName}`;
-
-                    fileTransferEl.querySelector('.information').innerHTML = '';
-                    fileTransferEl.querySelector('.information').append(information);
-                    fileTransferEl.querySelector('progress').value =
-                        progress.copiedBytes / progress.totalBytes;
+                    informationEl.querySelector('.buttons').classList.remove('show-extra');
+                    fileTransferIconEl.classList.add('showing');
 
                     rpc.invoke({
                         cmd: 'file_transfer',
                         resume: {
                             action: 'continue_or_abort'
                         }
-                    })
+                    });
+                    break;
+                }
+
+                case 'no_access': {
+                    fileTransferIconEl.classList.add('showing');
+                    fileTransferEl.classList.add('showing');
+
+                    informationEl.querySelector('.name').textContent = 'Copy (Permission Error)';
+                    informationEl.querySelector('.buttons').classList.add('show-extra');
+                    break;
+                }
+
+                case 'exists': {
+                    fileTransferIconEl.classList.add('showing');
+                    fileTransferEl.classList.add('showing');
+
+                    informationEl.querySelector('.name').textContent = 'Copy (File Already Exists)';
+                    informationEl.querySelector('.buttons').classList.add('show-extra');
+                    break;
+                }
+
+                case 'finished': {
+                    informationEl.querySelector('.buttons').classList.remove('show-extra');
+                    informationEl.querySelector('.name').textContent = 'Finished';
+                    informationEl.querySelector('.current').classList.remove('showing');
+                    informationEl.querySelector('button:last-child').textContent = 'Close';
                     break;
                 }
             }
             console.log(progress);
         };
+
+        document.querySelector('#file-transfer-popup .buttons').addEventListener('click', e => {
+            let action = '';
+
+            switch (e.target.textContent) {
+                case 'Retry': action = 'retry'; break;
+                case 'Skip': action = 'skip'; break;
+                case 'Overwrite': action = 'overwrite'; break;
+                case 'Cancel':
+                    action = 'abort';
+                    //document.getElementById('file-transfer-popup').classList.remove('showing');
+                    break;
+                case 'Close':
+                    document.getElementById('file-transfer-popup').classList.remove('showing');
+                    break;
+            }
+
+            if (action) {
+                rpc.invoke({
+                    cmd: 'file_transfer',
+                    resume: { action }
+                });
+            }
+        });
 
         function resetFolder(path) {
             const filesEl = document.getElementById('files');
@@ -2405,14 +2507,14 @@
                         rpc.invoke({
                             cmd: 'file_transfer',
                             start: {
-                                [filesSelection.kind]: {
-                                    to: document.getElementById('files')._path,
-                                    parent: filesSelection.folder,
-                                    names: filesSelection.selected
-                                }
+                                to: document.getElementById('files')._path,
+                                parent: filesSelection.folder,
+                                names: filesSelection.selected,
+                                kind: filesSelection.kind.toLowerCase()
                             }
                         });
                     }
+                    hideContextMenus();
                     break;
                 }
                 case 'Select All': {

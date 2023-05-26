@@ -30,6 +30,7 @@ dependencies = [
  "fs_extra",
  "http",
  "image",
+ "log",
  "md5",
  "mime",
  "png",
