@@ -93,7 +93,7 @@ fn spawn_file_transfer(
     rec: Receiver<FileTransferCmdResponse>,
     proxy: EventLoopProxy<UserEvent>) -> JoinHandle<()>
 {
-    let options = CopyOptions::default();
+    let options = CopyOptions::new();
 
     thread::spawn(move || {
         let from: Vec<_> = cmd.names.into_iter().map(|name| cmd.parent.join(name)).collect();
@@ -112,11 +112,14 @@ fn spawn_file_transfer(
             rec.recv().unwrap().into()
         };
 
-        // This will return an error when a user cancels, so we ignore it for now
-        let _ = match cmd.kind {
+        let result = match cmd.kind {
             FileTransferKind::Cut => move_items_with_progress(&from, &cmd.to, &options, on_progress),
             FileTransferKind::Copy => copy_items_with_progress(&from, &cmd.to, &options, on_progress),
         };
+
+        if let Err(e) = result {
+            log::error!("Error transfering files: {e:?}");
+        }
 
         file_transfer.state = FileTransferProgressState::Finished;
         proxy.send_event(UserEvent::FileTransferProgress(file_transfer)).unwrap();

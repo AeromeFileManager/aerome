@@ -1364,8 +1364,7 @@ dependencies = [
 [[package]]
 name = "fs_extra"
 version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
+source = "git+https://github.com/AeromeFileManager/fs_extra.git?branch=symlinks#fd78b4ea7f449753f046c8d3faa3fab7a89519c3"
 
 [[package]]
 name = "fsevent-sys"
