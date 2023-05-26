@@ -1017,20 +1017,28 @@
         background: var(--secondary-pop-semi-transparent);
     }
 
-    #file-transfer-menu-icon {
-        width: 22px;
-        height: 22px;
-        align-self: center;
+    #file-transfer-menu-icon > .bg {
+        position: relative;
+        pointer-events: none;
+        top: 16px;
+        left: 14px;
+        width: 12px;
+        height: 12px;
         border-radius: 2px;
         border: 2px solid var(--secondary-bg);
-        --percentage: 36%;
-        transition: opacity 0.2s ease-in-out;
+        transition: all 0.2s ease-in-out;
         background: linear-gradient(
             0deg,
-            var(--primary-fg) var(--percentage),
-            var(--primary-fg) var(--percentage),
-            rgba(255,255,255,0) var(--percentage),
+            var(--secondary-bg) var(--percentage, 0%),
+            var(--secondary-bg) var(--percentage, 0%),
+            rgba(255,255,255,0) var(--percentage, 0%),
             rgba(250,250,250,0) 100%);
+    }
+
+    header.compressed #file-transfer-menu-icon > .bg {
+        width: 6px;
+        height: 6px;
+        top: 7px;
     }
 
     #file-transfer-menu-icon:not(.showing) {
@@ -1350,7 +1358,7 @@
                         </div>
                     </div>
                 </div>
-
+                <div class="bg" aria-hidden=true></div>
                 <div class="tap-area" aria-hidden=true></div>
             </div>
 
@@ -1756,7 +1764,7 @@
             informationEl.querySelector('.current').classList.add('showing');
             informationEl.querySelector('button:last-child').textContent = 'Cancel';
 
-            const percentage = progress.copiedBytes / progress.totalBytes;
+            const percentage = progress.copiedBytes / progress.totalBytes || 0;
             fileTransferIconEl.style.setProperty('--percentage', `${percentage * 100}%`);
             fileTransferEl.querySelector('progress').value = percentage;
 
@@ -1800,7 +1808,6 @@
                     break;
                 }
             }
-            console.log(progress);
         };
 
         document.querySelector('#file-transfer-popup .buttons').addEventListener('click', e => {
