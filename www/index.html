@@ -1524,15 +1524,68 @@
             rpc.invoke({ cmd: 'communicate', message });
         });
 
-        document.getElementById('files').addEventListener('click', e => {
+        document.getElementById('files').addEventListener('dblclick', e => {
             const li = e.target.closest('li');
             if (!li) return;
             rpc.invoke({ cmd: 'forward', to: li.textContent, options: future.options });
         });
 
-        document.getElementById('actions').addEventListener('click', e => {
+        document.getElementById('files').addEventListener('click', e => {
             const li = e.target.closest('li');
             if (!li) return;
+
+            const filesEl = li.parentElement;
+
+            if (!e.ctrlKey && !e.shiftKey) {
+                for (const child of filesEl.querySelectorAll('.selected, .focused')) {
+                    child.classList.remove('selected', 'focused');
+                }
+            }
+
+            if (e.shiftKey) {
+                const mostRecentFocusedEl = filesEl.querySelector('.focused');
+                if (!mostRecentFocusedEl) {
+                    for (const focused of filesEl.querySelectorAll('.focused')) {
+                        focused.classList.remove('focused');
+                    }
+                    li.classList.toggle('selected');
+                    li.classList.add('focused');
+                    return;
+                }
+
+                const aIndex = [ ...filesEl.children ].findIndex(el => el === mostRecentFocusedEl);
+                const bIndex = [ ...filesEl.children ].findIndex(el => el === li);
+                const isSelecting = !filesEl.children[bIndex].classList.contains('selected');
+
+                if (aIndex === bIndex) {
+                    li.classList.remove('selected', 'focused');
+                    for (const focused of filesEl.querySelectorAll('.focused')) {
+                        focused.classList.remove('focused');
+                    }
+                    return;
+                }
+
+                const startIndex = Math.min(aIndex, bIndex);
+                const endIndex = Math.max(aIndex, bIndex);
+
+                for (let i = startIndex; i <= endIndex; i++) {
+                    if (isSelecting) {
+                        filesEl.children[i].classList.add('selected');
+                    } else {
+                        filesEl.children[i].classList.remove('selected');
+                    }
+                }
+                for (const focused of filesEl.querySelectorAll('.focused')) {
+                    focused.classList.remove('focused');
+                }
+                li.classList.add('focused');
+            } else {
+                for (const focused of filesEl.querySelectorAll('.focused')) {
+                    focused.classList.remove('focused');
+                }
+                li.classList.toggle('selected');
+                li.classList.add('focused');
+            }
         });
 
         document.getElementById('action-suggestions').addEventListener('click', showActionSuggestions);
@@ -1725,34 +1778,6 @@
             );
         };
 
-        /*
-         *
-
-                <div class="content file-transfer" id="file-transfer-popup">
-                    <progress
-                        id="file-transfer-progress-bar"
-                        aria-label="File transfer progress"></progress>
-
-                    <div class="information">
-
-                    <template>
-                        <h2>$NAME</h2>
-
-                        <h3>From</h3>
-                        <p class="from">$FILENAME</p>
-
-                        <h3>To</h3>
-                        <p class="to">$</p>
-
-                        <button>Cancel</button>
-                    </template>
-
-        let filesSelection = {
-            kind: '',
-            folder: '',
-            selected: []
-        };
-                    */
         window.notifyFileTransferProgress = ({ progress, from, to, state }) => {
             const fileTransferIconEl = document.getElementById('file-transfer-menu-icon');
             const fileTransferEl = document.getElementById('file-transfer-popup');
@@ -2646,6 +2671,7 @@
             filesEl.addEventListener('pointerup', onUp);
             scrollEl.addEventListener('scroll', onScroll);
 
+            let seenElements = new Map();
             function highlightIntersections() {
                 const x1 = parseInt(boxEl.style.left);
                 const x2 = parseInt(boxEl.style.width) + x1;
@@ -2668,8 +2694,18 @@
                     const isWithinBoxEnd = i % childRowSize <= rowX2Offset;
 
                     if (isWithinBoxStart && isWithinBoxEnd && i >= startOffset && i < endOffset) {
-                        filesEl.children[i].classList.add('selected');
-                    } else {
+                        const child = filesEl.children[i];
+                        let add = seenElements.get(child);
+                        if (add == null) {
+                            add = !child.classList.contains('selected');
+                            seenElements.set(child, add);
+                        }
+                        if (add) {
+                            child.classList.add('selected');
+                        } else {
+                            child.classList.remove('selected');
+                        }
+                    } else if (!e.ctrlKey && !e.shiftKey) {
                         filesEl.children[i].classList.remove('selected');
                     }
                 }
