@@ -1781,12 +1781,13 @@
         let skippedBytes = 0;
         let currentFileBytes = 0;
 
-        window.notifyFileTransferProgress = ({ progress, from, to, state }) => {
+        window.notifyFileTransferProgress = ({ progress, from, to, state, kind }) => {
             const fileTransferIconEl = document.getElementById('file-transfer-menu-icon');
             const fileTransferEl = document.getElementById('file-transfer-popup');
             const informationEl = fileTransferEl.querySelector('.information');
             const { folder } = filesSelection;
 
+            informationEl.querySelector('.name').textContent = kind[0].toUpperCase() + kind.slice(1);
             informationEl.querySelector('.from').textContent = `${from}/${progress.fileName}`;
             informationEl.querySelector('.to').textContent = `${to}/${progress.fileName}`;
             informationEl.querySelector('.current').classList.add('showing');
@@ -1816,7 +1817,7 @@
                     fileTransferIconEl.classList.add('showing');
                     fileTransferEl.classList.add('showing');
 
-                    informationEl.querySelector('.name').textContent = 'Copy (Permission Error)';
+                    informationEl.querySelector('.name').textContent += ' (Permission Error)';
                     informationEl.querySelector('.buttons').classList.add('show-extra');
                     break;
                 }
@@ -1825,7 +1826,7 @@
                     fileTransferIconEl.classList.add('showing');
                     fileTransferEl.classList.add('showing');
 
-                    informationEl.querySelector('.name').textContent = 'Copy (File Already Exists)';
+                    informationEl.querySelector('.name').textContent += ' (File Already Exists)';
                     informationEl.querySelector('.buttons').classList.add('show-extra');
                     break;
                 }
