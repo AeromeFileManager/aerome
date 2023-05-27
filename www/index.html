@@ -2615,10 +2615,10 @@
             files.setAttribute('inert', true);
         }
 
-        document.getElementById('files').addEventListener('pointerdown', e => {
-            if (e.target.id !== 'files' && !e.target.matches('li')) return;
+        document.querySelector('.files-wrapper').addEventListener('pointerdown', e => {
+            if (!e.target.matches('.files-wrapper, #files, li')) return;
 
-            const filesEl = e.target.closest('#files');
+            const filesEl = document.getElementById('files');
             const scrollEl = filesEl.parentElement;
             const boxEl = document.getElementById('dnd-visual-box');
 
