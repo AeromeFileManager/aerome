@@ -1778,6 +1778,9 @@
             );
         };
 
+        let skippedBytes = 0;
+        let currentFileBytes = 0;
+
         window.notifyFileTransferProgress = ({ progress, from, to, state }) => {
             const fileTransferIconEl = document.getElementById('file-transfer-menu-icon');
             const fileTransferEl = document.getElementById('file-transfer-popup');
@@ -1789,7 +1792,9 @@
             informationEl.querySelector('.current').classList.add('showing');
             informationEl.querySelector('button:last-child').textContent = 'Cancel';
 
-            const percentage = progress.copiedBytes / progress.totalBytes || 0;
+            currentFileBytes = progress.fileTotalBytes;
+
+            const percentage = ((progress.copiedBytes + skippedBytes) / progress.totalBytes) || 0;
             fileTransferIconEl.style.setProperty('--percentage', `${percentage * 100}%`);
             fileTransferEl.querySelector('progress').value = percentage;
 
@@ -1826,6 +1831,7 @@
                 }
 
                 case 'finished': {
+                    skippedBytes = 0;
                     informationEl.querySelector('.buttons').classList.remove('show-extra');
                     informationEl.querySelector('.name').textContent = 'Finished';
                     informationEl.querySelector('.current').classList.remove('showing');
@@ -1840,7 +1846,10 @@
 
             switch (e.target.textContent) {
                 case 'Retry': action = 'retry'; break;
-                case 'Skip': action = 'skip'; break;
+                case 'Skip':
+                    action = 'skip';
+                    skippedBytes += currentFileBytes;
+                    break;
                 case 'Overwrite': action = 'overwrite'; break;
                 case 'Cancel':
                     action = 'abort';
