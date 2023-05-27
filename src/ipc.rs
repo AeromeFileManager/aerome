@@ -43,6 +43,11 @@ pub enum Cmd {
     Options {
         options: Options
     },
+    Rename {
+        from: String,
+        to: String,
+        options: Options
+    },
     Settings {
         settings: Settings
     },

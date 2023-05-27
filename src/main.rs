@@ -224,6 +224,37 @@ fn main() -> wry::Result<()> {
                     script_result: None
                 });
             },
+            Cmd::Rename { from, to, options } => {
+                let mut folder = handler_folder.lock().unwrap();
+                let from_listing = folder.files.iter().find(|l| l.name == from);
+                let to_listing = folder.files.iter().find(|l| l.name == to);
+
+                match (from_listing, to_listing) {
+                    (_, Some(_)) => {
+                        proxy.send_event(UserEvent::UpdateFolder {
+                            folder: (*folder).clone(),
+                            script_result: None
+                        });
+                    },
+                    (Some(FolderListing { kind, .. }), None) if *kind == FolderListingType::Folder => {
+                        let from = folder.path.join(from);
+                        let to = folder.path.join(to);
+
+                        fs::create_dir(&to).unwrap();
+                        fs::rename(from, to).unwrap();
+
+                        *folder = get_folder(&folder.path, &options, &mime_db, &handler_thumbnails);
+                    },
+                    (Some(FolderListing { kind, ..}), None) => {
+                        let from = folder.path.join(from);
+                        let to = folder.path.join(to);
+                        fs::rename(from, to).unwrap();
+
+                        *folder = get_folder(&folder.path, &options, &mime_db, &handler_thumbnails);
+                    },
+                    (None, None) => {}
+                };
+            },
             Cmd::Settings { settings } => {
                 store.set_account(&settings.account);
                 proxy.send_event(UserEvent::UpdateSettings { settings });

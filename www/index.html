@@ -1965,7 +1965,8 @@
                 default: {
                     const hasFocusableElementParent =
                         e.target.closest('input') ||
-                        e.target.closest('h1#folder');
+                        e.target.closest('h1#folder') ||
+                        e.target.closest('[contenteditable]');
 
                     if (!hasFocusableElementParent) {
                         const action = document.getElementById('action');
@@ -2578,6 +2579,42 @@
 
         document.getElementById('files-context-menu').addEventListener('click', e => {
             switch (e.target.textContent) {
+                case 'Rename': {
+                    const selectedEls = document.getElementById('files').querySelectorAll('.selected');
+                    if (selectedEls.length === 1) {
+                        const nameEl = selectedEls[0].querySelector('span');
+                        const name = nameEl.textContent;
+                        const range = document.createRange();
+                        const selection = window.getSelection();
+                        const submitRename = () => {
+                            nameEl.removeAttribute('contenteditable');
+                            nameEl.removeEventListener('keypress', onKeyPress);
+                            nameEl.removeEventListener('blur', submitRename);
+                            rpc.invoke({
+                                cmd: 'rename',
+                                from: name,
+                                to: nameEl.textContent,
+                                options: future.options
+                            });
+                        };
+                        const onKeyPress = e => {
+                            if (e.key !== 'Enter') return;
+                            nameEl.blur();
+                        };
+
+                        nameEl.contentEditable = true;
+                        nameEl.addEventListener('keypress', onKeyPress);
+                        nameEl.addEventListener('blur', submitRename);
+                        nameEl.focus();
+
+                        range.selectNodeContents(nameEl);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+
+                        hideContextMenus();
+                    }
+                    break;
+                }
                 case 'Copy':
                 case 'Cut': {
                     filesSelection = {

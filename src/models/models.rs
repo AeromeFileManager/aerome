@@ -31,7 +31,7 @@ pub struct FolderListing {
     pub graphic: Option<Url>
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum FolderListingType {
     File,
     Folder,
