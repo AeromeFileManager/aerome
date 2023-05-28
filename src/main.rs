@@ -242,18 +242,27 @@ fn main() -> wry::Result<()> {
 
                         fs::create_dir(&to).unwrap();
                         fs::rename(from, to).unwrap();
-
-                        *folder = get_folder(&folder.path, &options, &mime_db, &handler_thumbnails);
                     },
                     (Some(FolderListing { kind, ..}), None) => {
                         let from = folder.path.join(from);
                         let to = folder.path.join(to);
                         fs::rename(from, to).unwrap();
-
+                    },
+                    (None, None) if &*from == "New Folder" => {
+                        fs::create_dir(folder.path.join(to)).unwrap();
                         *folder = get_folder(&folder.path, &options, &mime_db, &handler_thumbnails);
+                    },
+                    (None, None) if &*from == "New File" => {
+                        fs::OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .open(folder.path.join(to))
+                            .unwrap();
                     },
                     (None, None) => {}
                 };
+
+                *folder = get_folder(&folder.path, &options, &mime_db, &handler_thumbnails);
             },
             Cmd::Settings { settings } => {
                 store.set_account(&settings.account);

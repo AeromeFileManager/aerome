@@ -1407,7 +1407,7 @@
     <div id="folder-context-menu" inert aria-hidden=true class="contextmenu">
         <ul tabindex="-1">
             <li><span>New Folder</span></li>
-            <li><span>New Document</span></li>
+            <li><span>New File</span></li>
 
             <div class="divider" aria-hidden=true></div>
 
@@ -1780,7 +1780,6 @@
 
         let skippedBytes = 0;
         let currentFileBytes = 0;
-
         window.notifyFileTransferProgress = ({ progress, from, to, state, kind }) => {
             const fileTransferIconEl = document.getElementById('file-transfer-menu-icon');
             const fileTransferEl = document.getElementById('file-transfer-popup');
@@ -2540,11 +2539,22 @@
             hideContextMenus();
         });
 
+        function clearFilesSelection() {
+            for (const item of document.getElementById('files').children) {
+                item.classList.remove('selected');
+            }
+        }
+
         document.getElementById('folder-context-menu').addEventListener('click', e => {
-            // TODO
             switch (e.target.textContent) {
-                case 'New Folder': break;
-                case 'New Document': break;
+                case 'New Folder': {
+                    newThing('folder', e.target.textContent);
+                    break;
+                }
+                case 'New File': {
+                    newThing('text-x-generic', e.target.textContent);
+                    break;
+                }
                 case 'Paste': {
                     if (filesSelection.kind) {
                         rpc.invoke({
@@ -2569,6 +2579,35 @@
                 };
                 case 'Inspect': break;
             }
+
+            function newThing(icon, text) {
+                const filesEl = document.getElementById('files');
+                const li = document.createElement('li');
+                const span = document.createElement('span');
+
+                const graphic = document.createElement('img');
+                graphic.src = 'icon://' + icon;
+                graphic.className = 'image';
+                li.append(graphic);
+
+                span.textContent = text;
+                li.append(span);
+
+                const elementsUnder = document.elementsFromPoint(e.x, e.y);
+                const elementUnder = elementsUnder
+                    .find(el => el.tagName === 'LI' && filesEl.contains(el));
+
+                if (elementUnder) {
+                    filesEl.insertBefore(li, elementUnder);
+                } else {
+                    filesEl.append(li);
+                    li.scrollIntoView();
+                }
+
+                clearFilesSelection();
+                li.classList.add('selected');
+                triggerRename();
+            }
         });
 
         let filesSelection = {
@@ -2577,42 +2616,46 @@
             selected: []
         };
 
+        function triggerRename() {
+            const selectedEls = document.getElementById('files').querySelectorAll('.selected');
+            if (selectedEls.length === 1) {
+                const nameEl = selectedEls[0].querySelector('span');
+                const name = nameEl.textContent;
+                const range = document.createRange();
+                const selection = window.getSelection();
+                const submitRename = () => {
+                    nameEl.removeAttribute('contenteditable');
+                    nameEl.removeEventListener('keypress', onKeyPress);
+                    nameEl.removeEventListener('blur', submitRename);
+                    rpc.invoke({
+                        cmd: 'rename',
+                        from: name,
+                        to: nameEl.textContent,
+                        options: future.options
+                    });
+                };
+                const onKeyPress = e => {
+                    if (e.key !== 'Enter') return;
+                    nameEl.blur();
+                };
+
+                nameEl.contentEditable = true;
+                nameEl.addEventListener('keypress', onKeyPress);
+                nameEl.addEventListener('blur', submitRename);
+                nameEl.focus();
+
+                range.selectNodeContents(nameEl);
+                selection.removeAllRanges();
+                selection.addRange(range);
+
+                hideContextMenus();
+            }
+        }
+
         document.getElementById('files-context-menu').addEventListener('click', e => {
             switch (e.target.textContent) {
                 case 'Rename': {
-                    const selectedEls = document.getElementById('files').querySelectorAll('.selected');
-                    if (selectedEls.length === 1) {
-                        const nameEl = selectedEls[0].querySelector('span');
-                        const name = nameEl.textContent;
-                        const range = document.createRange();
-                        const selection = window.getSelection();
-                        const submitRename = () => {
-                            nameEl.removeAttribute('contenteditable');
-                            nameEl.removeEventListener('keypress', onKeyPress);
-                            nameEl.removeEventListener('blur', submitRename);
-                            rpc.invoke({
-                                cmd: 'rename',
-                                from: name,
-                                to: nameEl.textContent,
-                                options: future.options
-                            });
-                        };
-                        const onKeyPress = e => {
-                            if (e.key !== 'Enter') return;
-                            nameEl.blur();
-                        };
-
-                        nameEl.contentEditable = true;
-                        nameEl.addEventListener('keypress', onKeyPress);
-                        nameEl.addEventListener('blur', submitRename);
-                        nameEl.focus();
-
-                        range.selectNodeContents(nameEl);
-                        selection.removeAllRanges();
-                        selection.addRange(range);
-
-                        hideContextMenus();
-                    }
+                    triggerRename();
                     break;
                 }
                 case 'Copy':
