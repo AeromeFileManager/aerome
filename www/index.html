@@ -1010,6 +1010,14 @@
         cursor: default;
     }
 
+    #files-context-menu:not(.trash) .trash-include {
+        display: none;
+    }
+
+    #files-context-menu.trash .trash-exclude {
+        display: none;
+    }
+
     #dnd-visual-box {
         position: absolute;
         pointer-events: none;
@@ -1424,12 +1432,20 @@
             <li><span>Cut</span></li>
             <li><span>Copy</span></li>
             <li class="single-only"><span>Rename</span></li>
+
             <div class="divider" aria-hidden="true"></div>
+
             <li><span>Send To</span></li>
             <li><span>Compress</span></li>
+            <li class="trash-include"><span>Restore</span></li>
+
             <div class="divider" aria-hidden="true"></div>
-            <li><span>Trash</span></li>
+
+            <li class="trash-exclude"><span>Trash</span></li>
+            <li class="trash-include"><span>Delete</span></li>
+
             <div class="divider" aria-hidden="true"></div>
+
             <li><span>Inspect</span></li>
         </ul>
     </div>
@@ -1620,11 +1636,16 @@
         }
 
         let initialized = false;
-        window.setFolder = ({ path, files }) => {
+        window.setFolder = ({ url, path, files }) => {
             const filesEl = document.getElementById('files');
             const folderEl = document.getElementById('folder');
 
-            resetFolder(path);
+            if (url?.startsWith('trash:')) {
+                resetFolder('Trash');
+            } else {
+                resetFolder(path);
+            }
+
             document.getElementById('file-deep-look').classList.remove('error');
 
             filesEl._path = path;
@@ -1924,7 +1945,23 @@
         document.getElementById('folder').addEventListener('keypress', e => {
             if (e.key !== 'Enter') return;
             e.preventDefault();
-            rpc.invoke({ cmd: 'jump', to: e.target.textContent, options: future.options });
+
+            const text = e.target.textContent
+            let to;
+            switch (text) {
+                case 'trash:':
+                case 'trash://': to = text; break;
+                default: {
+                    if (text.startsWith('file://')) to = text;
+                    else to = `file://${text}`
+                }
+            }
+
+            rpc.invoke({
+                cmd: 'jump',
+                to,
+                options: future.options
+            });
         });
 
         document.getElementById('close-actions').addEventListener('click', e => {
@@ -2529,6 +2566,14 @@
                 showFolderContextMenu(e);
             }
 
+            const folder = document.getElementById('folder');
+            for (const menu of document.querySelectorAll('.contextmenu')) {
+                if (folder.textContent === 'Trash') {
+                    menu.classList.add('trash');
+                } else {
+                    menu.classList.remove('trash');
+                }
+            }
         });
 
         document.addEventListener('click', e => {
@@ -2657,6 +2702,7 @@
                     triggerRename();
                     break;
                 }
+
                 case 'Copy':
                 case 'Cut': {
                     filesSelection = {
@@ -2668,6 +2714,32 @@
                     hideContextMenus();
                     break;
                 }
+
+                case 'Trash': {
+                    trashCommand('put');
+                    break;
+                }
+
+                case 'Delete': {
+                    trashCommand('clear');
+                    break;
+                }
+
+                case 'Restore': {
+                    trashCommand('restore');
+                    break;
+                }
+            }
+
+            function trashCommand(command) {
+                rpc.invoke({
+                    cmd: 'trash',
+                    [command]: {
+                        paths: [ ...document.querySelectorAll('#files .selected') ]
+                            .map(el => el._name)
+                    }
+                });
+                hideContextMenus();
             }
         });
 

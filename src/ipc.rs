@@ -51,6 +51,7 @@ pub enum Cmd {
     Settings {
         settings: Settings
     },
+    Trash(TrashCmd),
     Communicate {
         message: String
     },
@@ -59,6 +60,14 @@ pub enum Cmd {
         options: Options
     },
     Window(WindowCmd),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrashCmd {
+    Put { paths: Vec<PathBuf> },
+    Restore { paths: Vec<String> },
+    Clear { paths: Option<Vec<String>> }
 }
 
 #[derive(Debug, Deserialize, Serialize)]

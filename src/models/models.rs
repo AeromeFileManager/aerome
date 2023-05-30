@@ -14,12 +14,13 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-use serde::{Serialize,Deserialize};
+use serde::{Serialize,Deserialize,Deserializer};
 use std::path::PathBuf;
 use url::Url;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Folder {
+    pub url: Option<Url>,
     pub path: PathBuf,
     pub files: Vec<FolderListing>,
 }

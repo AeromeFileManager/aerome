@@ -22,11 +22,13 @@ mod thumbnails;
 mod prompts;
 mod store;
 mod file_transfer;
+mod trash;
 
 use ipc::*;
 use file_transfer::{FileTransferService};
 use models::{Action,Account,AccountDirect,AccountAerome,ConversationItem,Suggestions,Folder,FolderListing,FileMetadata,FolderListingType,Options,Sort,Settings};
 use icons::Icons;
+use trash::Trash;
 use tokio::{runtime::{Runtime},process::Command};
 use tokio::io::{BufReader,AsyncBufReadExt,AsyncWriteExt,AsyncReadExt};
 use tokio::task::AbortHandle;
@@ -73,6 +75,7 @@ fn main() -> wry::Result<()> {
     let store = Store::new();
     let icons = Mutex::new(Icons::new());
     let mime_db = SharedMimeInfo::new();
+    let trash = Trash::new();
     let event_loop = EventLoop::<UserEvent>::with_user_event();
     let (thumbnails, handle) = Thumbnails::new(event_loop.create_proxy());
     let folder = Arc::new(Mutex::new(
@@ -141,26 +144,48 @@ fn main() -> wry::Result<()> {
                 }
             },
             Cmd::Jump { to, options } => {
-                let path = if to.starts_with("~/") {
-                    if let Some(home) = dirs::home_dir() {
-                        home.join(&to[2..])
-                    } else {
-                        PathBuf::from(&to)
+                let home = dirs::home_dir().unwrap();
+                let url = Url::parse(&to);
+                let scheme = url.clone()
+                    .map(|s| s.scheme().to_string())
+                    .unwrap_or_else(|_| String::new());
+                let path = match &*scheme {
+                    "file" => match &to[7..] {
+                        "~" => home,
+                        s @ _ if s.starts_with("~/") => {
+                            home.join(&s[2..])
+                        },
+                        s @ _ if s == "Trash" || s == "trash" => {
+                            dirs::data_dir().unwrap().join("Trash").join("files")
+                        },
+                        s @ _ => {
+                            PathBuf::from(s)
+                        }
+                    },
+                    "trash" => {
+                        dirs::data_dir().unwrap().join("Trash").join("files")
+                    },
+                    _ => {
+                        return
                     }
-                } else {
-                    PathBuf::from(&to)
                 };
 
                 if !path.exists() {
                     proxy.send_event(UserEvent::NonexistentFolder {
-                        path: to
+                        path: String::from(to)
                     });
                 } else {
                     let mut unlocked = handler_folder.lock().unwrap();
                     *unlocked = get_folder(&path, &options, &mime_db, &handler_thumbnails);
 
+                    let mut folder = (*unlocked).clone();
+                    folder.url = match &*scheme {
+                        "trash" => url.ok(),
+                        _ => None
+                    };
+
                     proxy.send_event(UserEvent::UpdateFolder {
-                        folder: (*unlocked).clone(),
+                        folder,
                         script_result: None
                     });
                 }
@@ -250,7 +275,6 @@ fn main() -> wry::Result<()> {
                     },
                     (None, None) if &*from == "New Folder" => {
                         fs::create_dir(folder.path.join(to)).unwrap();
-                        *folder = get_folder(&folder.path, &options, &mime_db, &handler_thumbnails);
                     },
                     (None, None) if &*from == "New File" => {
                         fs::OpenOptions::new()
@@ -267,7 +291,21 @@ fn main() -> wry::Result<()> {
             Cmd::Settings { settings } => {
                 store.set_account(&settings.account);
                 proxy.send_event(UserEvent::UpdateSettings { settings });
-            }
+            },
+            Cmd::Trash(TrashCmd::Put { paths }) => {
+                let folder = handler_folder.lock().unwrap();
+                let trashed = paths.into_iter()
+                    .map(|path| folder.path.join(path))
+                    .collect::<Vec<_>>();
+
+                trash.put(&trashed);
+            },
+            Cmd::Trash(TrashCmd::Restore { paths }) => {
+                trash.restore(&*paths);
+            },
+            Cmd::Trash(TrashCmd::Clear { paths }) => {
+                trash.clear(paths.as_ref().map(|p| &**p));
+            },
             _ => {}
         }
     };
@@ -748,6 +786,7 @@ fn get_folder(
 
     Folder {
         path: path.to_path_buf(),
+        url: None,
         files
     }
 }
