@@ -386,10 +386,12 @@
         margin: 10px;
         border-radius: 10px;
         transition: filter 0.15s ease-in-out;
+        border: 1px solid transparent;
     }
 
     ul#files > li.selected {
         background: var(--secondary-fg-semi-transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-bg) 85%, var(--primary-fg));
     }
 
     ul#files > li:hover > .image {
