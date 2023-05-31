@@ -17,10 +17,10 @@
 use std::sync::{Arc, Mutex};
 use std::path::{Path, PathBuf};
 use std::fs::{self,DirEntry};
+use std::process::{Command,Stdio};
 use xdg_mime::{SharedMimeInfo, Guess};
 use wry::application::event_loop::EventLoopProxy;
 use url::Url;
-use tokio::process::Command;    
 use tokio::runtime::Runtime;
 use crate::{Thumbnails,UserEvent,Options,Folder,FolderListing,FolderListingType,FileMetadata,Sort};
 use std::ffi::OsStr;
@@ -364,34 +364,42 @@ fn get_folder_icon_url(path: &Path) -> Url {
 
 #[cfg(target_os = "linux")]
 pub fn open(path: impl AsRef<OsStr>) -> bool {
-    Runtime::new()
-        .unwrap()
-        .block_on(async move {
-            let result = Command::new("xdg-open")
-                .args(&[ path ])
-                .output()
-                .await
-                .unwrap();
+    let mut child = Command::new("xdg-open")
+        .args(&[ path ])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("xdg-open failed");
 
-            match result.status.code() {
-                Some(XDG_OPEN_ERROR_APPLICATION_NOT_FOUND) |
-                Some(XDG_OPEN_ERROR_ACTION_FAILED) => false,
-                _ => true
-            }
-        })
+    std::thread::sleep(Duration::from_millis(100));
+    match child.try_wait() {
+        Ok(Some(status)) => match status.code() {
+            Some(XDG_OPEN_ERROR_APPLICATION_NOT_FOUND) |
+            Some(XDG_OPEN_ERROR_ACTION_FAILED) => false,
+            _ => true
+        },
+        Ok(None) => true,
+        _ => false
+    }
 }
 
 #[cfg(target_os = "macos")]
 pub fn open(path: impl AsRef<OsStr>) -> bool {
-    Runtime::new().unwrap().block_on(async move {
-        Command::new("open")
-            .args(&[ &path ])
-            .output()
-            .await
-            .unwrap()
-            .status
-            .success()
-    })
+    let mut child = Command::new("xdg-open")
+        .args(&[ path ])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("open failed");
+
+    std::thread::sleep(Duration::from_millis(100));
+    match child.try_wait() {
+        Ok(Some(status)) => status.success(),
+        Ok(None) => true,
+        _ => false
+    }
 }
 
 const XDG_OPEN_ERROR_APPLICATION_NOT_FOUND: i32 = 3;
