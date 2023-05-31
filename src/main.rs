@@ -23,6 +23,7 @@ mod prompts;
 mod store;
 mod file_transfer;
 mod trash;
+mod location;
 
 use ipc::*;
 use file_transfer::{FileTransferService};
@@ -67,6 +68,7 @@ use xdg_mime::{SharedMimeInfo, Guess};
 use store::Store;
 use prompt::{PromptArgs,EvaluateError,EvaluateResult,evaluate};
 use ai::{ChatError, ChatError::OpenAIError};
+use location::{Location,open};
 
 fn main() -> wry::Result<()> {
     env_logger::init();
@@ -77,16 +79,17 @@ fn main() -> wry::Result<()> {
     let mime_db = SharedMimeInfo::new();
     let trash = Trash::new();
     let event_loop = EventLoop::<UserEvent>::with_user_event();
-    let (thumbnails, handle) = Thumbnails::new(event_loop.create_proxy());
-    let folder = Arc::new(Mutex::new(
-        get_folder(&current_dir().unwrap(), &Options::default(), &mime_db, &thumbnails)));
     let proxy = event_loop.create_proxy();
+    let (thumbnails, _) = Thumbnails::new(proxy.clone());
+    let location = Location::new(
+        &current_dir().unwrap(),
+        SharedMimeInfo::new(),
+        proxy.clone(),
+        thumbnails.clone());
     let rt = Runtime::new().unwrap();
     let theme = Icons::get_current_theme_name();
     let file_transfer = FileTransferService::new(proxy.clone());
 
-    let handler_folder = folder.clone();
-    let handler_thumbnails = thumbnails.clone();
     let handler = move |window: &Window, req: String| {
         match serde_json::from_str(req.as_str()).unwrap() {
             Cmd::Dev => {
@@ -95,100 +98,19 @@ fn main() -> wry::Result<()> {
                 }
             },
             Cmd::Initialized => {
-                let path = std::env::current_dir().unwrap()
-                    .join("assets").join("icon").join("icon")
-                    .with_extension("png");
-
-                handler_thumbnails.generate(&path);
                 window.set_visible(true);
                 proxy.send_event(UserEvent::UpdateSettings {
                     settings: store.get_settings()
                 });
             },
             Cmd::Back { options } => {
-                let mut unlocked = handler_folder.lock().unwrap();
-
-                if let Some(parent) = unlocked.path.parent() {
-                    *unlocked = get_folder(&parent, &options, &mime_db, &handler_thumbnails);
-
-                    proxy.send_event(UserEvent::UpdateFolder {
-                        folder: (*unlocked).clone(),
-                        script_result: None
-                    });
-                }
+                location.back(&options);
             },
             Cmd::Forward { to, options } => {
-                let mut unlocked = handler_folder.lock().unwrap();
-                let next = unlocked.path.join(to);
-
-                if next.is_file() {
-                    if !open(&next) {
-                        *unlocked = get_folder(&next, &options, &mime_db, &handler_thumbnails);
-                        proxy.send_event(UserEvent::UpdateFileDeepLook {
-                            file: FileMetadata {
-                                name: next.file_name()
-                                    .map(|s| s.to_string_lossy())
-                                    .unwrap_or_default().to_string(),
-                                path: next,
-                                graphic: None,
-                                openers: vec![]
-                            }
-                        });
-                    }
-                } else {
-                    *unlocked = get_folder(&next, &options, &mime_db, &handler_thumbnails);
-                    proxy.send_event(UserEvent::UpdateFolder {
-                        folder: (*unlocked).clone(),
-                        script_result: None
-                    });
-                }
+                location.forward(&to, &options);
             },
             Cmd::Jump { to, options } => {
-                let home = dirs::home_dir().unwrap();
-                let url = Url::parse(&to);
-                let scheme = url.clone()
-                    .map(|s| s.scheme().to_string())
-                    .unwrap_or_else(|_| String::new());
-                let path = match &*scheme {
-                    "file" => match &to[7..] {
-                        "~" => home,
-                        s @ _ if s.starts_with("~/") => {
-                            home.join(&s[2..])
-                        },
-                        s @ _ if s == "Trash" || s == "trash" => {
-                            dirs::data_dir().unwrap().join("Trash").join("files")
-                        },
-                        s @ _ => {
-                            PathBuf::from(s)
-                        }
-                    },
-                    "trash" => {
-                        dirs::data_dir().unwrap().join("Trash").join("files")
-                    },
-                    _ => {
-                        return
-                    }
-                };
-
-                if !path.exists() {
-                    proxy.send_event(UserEvent::NonexistentFolder {
-                        path: String::from(to)
-                    });
-                } else {
-                    let mut unlocked = handler_folder.lock().unwrap();
-                    *unlocked = get_folder(&path, &options, &mime_db, &handler_thumbnails);
-
-                    let mut folder = (*unlocked).clone();
-                    folder.url = match &*scheme {
-                        "trash" => url.ok(),
-                        _ => None
-                    };
-
-                    proxy.send_event(UserEvent::UpdateFolder {
-                        folder,
-                        script_result: None
-                    });
-                }
+                location.jump(&to, &options);
             },
             Cmd::FileTransfer(cmd) => match cmd {
                 FileTransferCmd::Start(start) => file_transfer.enqueue(start),
@@ -207,32 +129,32 @@ fn main() -> wry::Result<()> {
                 proxy.send_event(UserEvent::CloseWindow);
             },
             Cmd::Communicate { message } => {
-                let unlocked = handler_folder.lock().unwrap();
                 let settings = store.get_settings();
 
                 if let Some(account) = settings.account {
-                    communicate(&rt, &message, proxy.clone(), &unlocked.clone(), &account);
+                    communicate(&rt, &message, proxy.clone(), &location.current_folder(), &account);
                 }
             },
             Cmd::Evaluate { item, options } if item.code.is_some() => {
-                let mut unlocked = handler_folder.lock().unwrap();
                 let script = format!("{}\n echo -e {}",
                     item.code.as_ref().unwrap(),
                     r#""\n""#);
 
-                let result = run_script_sync(script, &unlocked.path);
-                *unlocked = get_folder(&unlocked.path, &options, &mime_db, &handler_thumbnails);
+                let current_path = location.current_path();
+                let result = run_script_sync(script, &current_path);
+
+                location.update(&current_path, &options);
 
                 match (&result, item.message) {
                     (Ok(_), Some(message)) => {
                         maybe_add_suggestion(
-                            &rt, proxy.clone(), unlocked.path.clone(), message, item.code.unwrap());
+                            &rt, proxy.clone(), current_path, message, item.code.unwrap());
                     },
                     _ => {}
                 }
 
                 proxy.send_event(UserEvent::UpdateFolder {
-                    folder: (*unlocked).clone(),
+                    folder: location.current_folder(),
                     script_result: Some(result
                         .map(|r| ConversationItem::new(
                             format!("Command finished with result:\n\n{r}"), None))
@@ -241,23 +163,23 @@ fn main() -> wry::Result<()> {
                 });
             },
             Cmd::Options { options } => {
-                let mut unlocked = handler_folder.lock().unwrap();
-                *unlocked = get_folder(&unlocked.path, &options, &mime_db, &handler_thumbnails);
+                let path = location.current_path();
+                let folder = location.update(&path, &options);
 
                 proxy.send_event(UserEvent::UpdateFolder {
-                    folder: (*unlocked).clone(),
+                    folder,
                     script_result: None
                 });
             },
             Cmd::Rename { from, to, options } => {
-                let mut folder = handler_folder.lock().unwrap();
+                let mut folder = location.current_folder();
                 let from_listing = folder.files.iter().find(|l| l.name == from);
                 let to_listing = folder.files.iter().find(|l| l.name == to);
 
                 match (from_listing, to_listing) {
                     (_, Some(_)) => {
                         proxy.send_event(UserEvent::UpdateFolder {
-                            folder: (*folder).clone(),
+                            folder: folder.clone(),
                             script_result: None
                         });
                     },
@@ -286,16 +208,16 @@ fn main() -> wry::Result<()> {
                     (None, None) => {}
                 };
 
-                *folder = get_folder(&folder.path, &options, &mime_db, &handler_thumbnails);
+                location.update(&folder.path, &options);
             },
             Cmd::Settings { settings } => {
                 store.set_account(&settings.account);
                 proxy.send_event(UserEvent::UpdateSettings { settings });
             },
             Cmd::Trash(TrashCmd::Put { paths }) => {
-                let folder = handler_folder.lock().unwrap();
+                let current_path = location.current_path();
                 let trashed = paths.into_iter()
-                    .map(|path| folder.path.join(path))
+                    .map(|path| current_path.join(path))
                     .collect::<Vec<_>>();
 
                 trash.put(&trashed);
@@ -362,8 +284,6 @@ fn main() -> wry::Result<()> {
                 .map_err(Into::into)
         })
         .build()?;
-
-    let event_loop_folder = folder.clone();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -459,41 +379,6 @@ fn open_devtools(webview: &WebView) {
 
 #[cfg(not(debug_assertions))]
 fn open_devtools(webview: &WebView) {}
-
-#[cfg(target_os = "linux")]
-fn open(path: impl AsRef<OsStr>) -> bool {
-    Runtime::new()
-        .unwrap()
-        .block_on(async move {
-            let result = Command::new("xdg-open")
-                .args(&[ path ])
-                .output()
-                .await
-                .unwrap();
-
-            match result.status.code() {
-                Some(XDG_OPEN_ERROR_APPLICATION_NOT_FOUND) |
-                Some(XDG_OPEN_ERROR_ACTION_FAILED) => false,
-                _ => true
-            }
-        })
-}
-
-#[cfg(target_os = "macos")]
-fn open(path: impl AsRef<OsStr>) -> bool {
-    Runtime::new().unwrap().block_on(async move {
-        Command::new("open")
-            .args(&[ &path ])
-            .output()
-            .await
-            .unwrap()
-            .status
-            .success()
-    })
-}
-
-const XDG_OPEN_ERROR_APPLICATION_NOT_FOUND: i32 = 3;
-const XDG_OPEN_ERROR_ACTION_FAILED: i32 = 4;
 
 fn communicate(
     rt: &Runtime,
@@ -659,169 +544,4 @@ impl std::io::Write for PromptOut {
 
 impl Clone for PromptOut {
     fn clone(&self) -> Self { PromptOut(self.0.to_owned()) }
-}
-
-fn get_folder(
-    path: &Path,
-    options: &Options,
-    mime_db: &SharedMimeInfo,
-    thumbnails: &Thumbnails) -> Folder
-{
-    let files = if path.is_dir() {
-        let (mut folders, mut files) = fs::read_dir(&path)
-            .unwrap()
-            .into_iter()
-            .filter_map(|entry| entry.ok())
-            .filter_map(|entry| {
-                let name = entry.file_name().to_string_lossy().into_owned();
-
-                if name.starts_with(".") && !options.sort_show_hidden {
-                    return None;
-                }
-
-                Some(entry)
-            })
-            .fold((vec![], vec![]), |(mut folders, mut files), entry| {
-                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                    folders.push(entry);
-                } else {
-                    files.push(entry);
-                }
-
-                (folders, files)
-            });
-
-        let files = if options.sort_folders_first {
-            folders.sort_by(|a, b| {
-                let a_name = a.file_name().to_string_lossy().into_owned();
-                let b_name = b.file_name().to_string_lossy().into_owned();
-
-                match options.sort {
-                    Sort::AToZ => a_name.cmp(&b_name),
-                    Sort::ZToA => b_name.cmp(&a_name),
-                    Sort::Date => Ordering::Equal
-                }
-            });
-            files.sort_by(|a, b| {
-                let a_name = a.file_name().to_string_lossy().into_owned();
-                let b_name = b.file_name().to_string_lossy().into_owned();
-
-                match options.sort {
-                    Sort::AToZ => a_name.cmp(&b_name),
-                    Sort::ZToA => b_name.cmp(&a_name),
-                    Sort::Date => Ordering::Equal
-                }
-            });
-            folders.into_iter().chain(files.into_iter()).collect::<Vec<_>>()
-        } else {
-            let mut joined = folders.into_iter().chain(files.into_iter()).collect::<Vec<_>>();
-            joined.sort_by(|a, b| {
-                let a_name = a.file_name().to_string_lossy().into_owned();
-                let b_name = b.file_name().to_string_lossy().into_owned();
-
-                match options.sort {
-                    Sort::AToZ => a_name.cmp(&b_name),
-                    Sort::ZToA => b_name.cmp(&a_name),
-                    Sort::Date => {
-                        let a_modified = a.metadata().ok().map(|m| m.modified().ok()).flatten();
-                        let b_modified = b.metadata().ok().map(|m| m.modified().ok()).flatten();
-
-                        match (a_modified, b_modified) {
-                            (Some(a), Some(b)) => a.cmp(&b),
-                            _ => Ordering::Equal
-                        }
-                    },
-                }
-            });
-            joined
-        };
-
-        files.into_iter()
-            .map(|entry| {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let icon_url = |entry: DirEntry| {
-                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                        Some(get_folder_icon_url(&entry.path()))
-                    } else {
-                        Some(get_file_icon_url(&entry.path()))
-                    }
-                };
-                let ext = name.split('.').rev().next();
-                let kind = entry.file_type()
-                    .map(|kind| if kind.is_dir() {
-                        FolderListingType::Folder
-                    } else if kind.is_symlink() {
-                        FolderListingType::Link
-                    } else {
-                        FolderListingType::File
-                    })
-                    .unwrap_or(FolderListingType::File);
-
-                let guess = mime_db.guess_mime_type()
-                    .file_name(&name)
-                    .guess();
-
-                let graphic = match (guess.uncertain(), guess.mime_type()) {
-                    (false, mime) if mime.type_() == mime::IMAGE => {
-                        let path = entry.path();
-
-                        thumbnails.url_from(&path).or_else(|| {
-                            thumbnails.generate(&path);
-                            icon_url(entry)
-                        })
-                    },
-                    _ => icon_url(entry),
-                };
-
-                FolderListing {
-                    name,
-                    kind,
-                    graphic
-                }
-            })
-            .collect::<Vec<FolderListing>>()
-    } else {
-        vec![]
-    };
-
-    Folder {
-        path: path.to_path_buf(),
-        url: None,
-        files
-    }
-}
-
-fn get_folder_icon_url(path: &Path) -> Url {
-    let paths = path.to_str().unwrap_or("").split("/");
-    let paths = paths.take(5).collect::<Vec<_>>();
-
-    match (paths.len(), paths.as_slice()) {
-        (4, [_, "home", _, "Music"]) => Url::parse("icon://folder-music").unwrap(),
-        (4, [_, "home", _, "Pictures"]) => Url::parse("icon://folder-pictures").unwrap(),
-        (4, [_, "home", _, "Documents"]) => Url::parse("icon://folder-documents").unwrap(),
-        (4, [_, "home", _, "Downloads"]) => Url::parse("icon://folder-download").unwrap(),
-        (4, [_, "home", _, "Desktop"]) => Url::parse("icon://user-desktop").unwrap(),
-        (4, [_, "home", _, "Dropbox"]) => Url::parse("icon://folder-dropbox").unwrap(),
-        (4, [_, "home", _, "Public"]) => Url::parse("icon://folder-publicshare").unwrap(),
-        (4, [_, "home", _, "Templates"]) => Url::parse("icon://folder-templates").unwrap(),
-        (4, [_, "home", _, "Videos"]) => Url::parse("icon://folder-videos").unwrap(),
-        _ => Url::parse("icon://folder").unwrap()
-    }
-}
-
-fn get_file_icon_url(path: &Path) -> Url {
-    // TODO
-    Url::parse("icon://text-x-generic").unwrap()
-    /*
-     * figured this one out on linux, use the cli program: xdg-mime query filetype {filename}
-     * it'll return the mimetype thats used as an icon we can look up, so just:
-
-     * icon://$(xdg-mime query filetype {filename})
-
-     * will work. The man page has links to the spec, which links to c libraries for mime
-     * lookups. For Mac OS I probably need to import that library and install the entires
-     * /usr/share/mime folder if i want it to work. I could also take a look at how Mac OS
-     * handles mimetypes, but given I've already leaned into the Yaru theme, this is the
-     * faster path
-     */
 }

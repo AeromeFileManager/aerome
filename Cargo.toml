@@ -27,6 +27,8 @@ wry = { version = "0.27.3", features = ["transparent"] }
 xdg-mime = "0.3.3"
 fs_extra = { git = "https://github.com/AeromeFileManager/fs_extra.git", branch = "symlinks" }
 log = "0.4.17"
+notify = "6.0.0"
+notify-debouncer-mini = "0.3.0"
 
 [dev-dependencies]
 serial_test = "2.0.0"
