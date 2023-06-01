@@ -1959,11 +1959,9 @@
         });
 
         document.addEventListener('mousedown', (e) => {
-            if (e.target.classList.contains('folder-wrapper') && e.buttons === 1) {
+            if ((e.target.classList.contains('folder-wrapper') || e.target.id === 'header') && e.buttons === 1) {
                 rpc.invoke({ cmd: 'window', window: 'drag' });
                 e.preventDefault();
-                //e.detail === 2
-                    //? window.ipc.postMessage()
             }
         });
 
