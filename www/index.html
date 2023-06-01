@@ -368,11 +368,12 @@
         top: 120px;
     }
 
+
     ul#files {
         --grid-size: calc(120px + 100px * var(--grid-scale, 0.35));
 
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(var(--grid-size), 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(var(--grid-size), 1fr));
         margin: 0;
         padding: calc(10px + var(--header-large-height)) 0;
     }
@@ -404,6 +405,10 @@
         min-height: calc(var(--grid-size) - 60px);
         max-height: calc(var(--grid-size) - 60px);
         object-fit: contain;
+    }
+
+    ul#files > li > .image[src^="icon:"] {
+        object-fit: cover;
     }
 
     ul#files > li > span {
