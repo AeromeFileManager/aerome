@@ -112,6 +112,9 @@ pub const APP_ICON_MIMETYPE_IMAGE_X_GENERIC: &'static [u8] =
 pub const APP_ICON_MIMETYPE_TEXT_X_GENERIC: &'static [u8] =
     include_bytes!("../assets/Yaru/mimetypes/text-x-generic.png");
 
+pub const APP_ICON_MIMETYPE_APPLICATION_X_ZIP: &'static [u8] =
+    include_bytes!("../assets/Yaru/mimetypes/application-x-zip.png");
+
 pub fn install() {
     install_icons();
     install_prompts();
@@ -288,4 +291,8 @@ fn install_icons() {
     fs::write(
         mimetypes_dir.join("./text-x-generic.png"),
         APP_ICON_MIMETYPE_TEXT_X_GENERIC).unwrap();
+
+    fs::write(
+        mimetypes_dir.join("./application-x-zip.png"),
+        APP_ICON_MIMETYPE_APPLICATION_X_ZIP).unwrap();
 }

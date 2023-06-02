@@ -29,6 +29,7 @@ fs_extra = { git = "https://github.com/AeromeFileManager/fs_extra.git", branch =
 log = "0.4.17"
 notify = "6.0.0"
 notify-debouncer-mini = "0.3.0"
+zip = "0.6.6"
 
 [dev-dependencies]
 serial_test = "2.0.0"

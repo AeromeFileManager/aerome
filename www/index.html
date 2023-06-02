@@ -2621,11 +2621,11 @@
         document.getElementById('folder-context-menu').addEventListener('click', e => {
             switch (e.target.textContent) {
                 case 'New Folder': {
-                    newThing('folder', e.target.textContent);
+                    newVirtualFile(e, 'folder', e.target.textContent);
                     break;
                 }
                 case 'New File': {
-                    newThing('text-x-generic', e.target.textContent);
+                    newVirtualFile(e, 'text-x-generic', e.target.textContent);
                     break;
                 }
                 case 'Paste': {
@@ -2653,34 +2653,6 @@
                 case 'Inspect': break;
             }
 
-            function newThing(icon, text) {
-                const filesEl = document.getElementById('files');
-                const li = document.createElement('li');
-                const span = document.createElement('span');
-
-                const graphic = document.createElement('img');
-                graphic.src = 'icon://' + icon;
-                graphic.className = 'image';
-                li.append(graphic);
-
-                span.textContent = text;
-                li.append(span);
-
-                const elementsUnder = document.elementsFromPoint(e.x, e.y);
-                const elementUnder = elementsUnder
-                    .find(el => el.tagName === 'LI' && filesEl.contains(el));
-
-                if (elementUnder) {
-                    filesEl.insertBefore(li, elementUnder);
-                } else {
-                    filesEl.append(li);
-                    li.scrollIntoView();
-                }
-
-                clearFilesSelection();
-                li.classList.add('selected');
-                triggerRename();
-            }
         });
 
         let filesSelection = {
@@ -2689,23 +2661,55 @@
             selected: []
         };
 
-        function triggerRename() {
+        function newVirtualFile(at, icon, text, onSubmit) {
+            const filesEl = document.getElementById('files');
+            const li = document.createElement('li');
+            const span = document.createElement('span');
+
+            const graphic = document.createElement('img');
+            graphic.src = 'icon://' + icon;
+            graphic.className = 'image';
+            li.append(graphic);
+
+            span.textContent = text;
+            li.append(span);
+
+            const elementsUnder = document.elementsFromPoint(at.x, at.y);
+            const elementUnder = elementsUnder
+                .find(el => el.tagName === 'LI' && filesEl.contains(el));
+
+            if (elementUnder) {
+                filesEl.insertBefore(li, elementUnder);
+            } else {
+                filesEl.append(li);
+                li.scrollIntoView();
+            }
+
+            clearFilesSelection();
+            li.classList.add('selected');
+            triggerRename(onSubmit);
+        }
+
+        const renameCmd = (current, previous) => ({
+            cmd: 'rename',
+            from: previous,
+            to: current,
+            options: future.options
+        });
+
+        function triggerRename(cmd = renameCmd) {
             const selectedEls = document.getElementById('files').querySelectorAll('.selected');
             if (selectedEls.length === 1) {
                 const nameEl = selectedEls[0].querySelector('span');
                 const name = nameEl.textContent;
                 const range = document.createRange();
                 const selection = window.getSelection();
-                const submitRename = () => {
+                const submitCmd = () => {
                     nameEl.removeAttribute('contenteditable');
                     nameEl.removeEventListener('keypress', onKeyPress);
-                    nameEl.removeEventListener('blur', submitRename);
-                    rpc.invoke({
-                        cmd: 'rename',
-                        from: name,
-                        to: nameEl.textContent,
-                        options: future.options
-                    });
+                    nameEl.removeEventListener('blur', submitCmd);
+
+                    rpc.invoke(cmd(nameEl.textContent, name, nameEl));
                 };
                 const onKeyPress = e => {
                     if (e.key !== 'Enter') return;
@@ -2714,7 +2718,7 @@
 
                 nameEl.contentEditable = true;
                 nameEl.addEventListener('keypress', onKeyPress);
-                nameEl.addEventListener('blur', submitRename);
+                nameEl.addEventListener('blur', submitCmd);
                 nameEl.focus();
 
                 range.selectNodeContents(nameEl);
@@ -2729,6 +2733,18 @@
             switch (e.target.textContent) {
                 case 'Rename': {
                     triggerRename();
+                    break;
+                }
+
+                case 'Compress': {
+                    const selected = [ ...document.querySelectorAll('#files > .selected') ]
+                        .map(el => el._name);
+
+                    newVirtualFile(e, 'application-x-zip', 'compressed.zip', current => ({
+                        cmd: 'compress',
+                        to: current,
+                        files: selected
+                    }));
                     break;
                 }
 

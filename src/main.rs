@@ -24,6 +24,7 @@ mod store;
 mod file_transfer;
 mod trash;
 mod location;
+mod compress;
 
 use ipc::*;
 use file_transfer::{FileTransferService};
@@ -69,6 +70,7 @@ use store::Store;
 use prompt::{PromptArgs,EvaluateError,EvaluateResult,evaluate};
 use ai::{ChatError, ChatError::OpenAIError};
 use location::{Location,open};
+use compress::Compress;
 
 fn main() -> wry::Result<()> {
     env_logger::init();
@@ -102,6 +104,14 @@ fn main() -> wry::Result<()> {
                 proxy.send_event(UserEvent::UpdateSettings {
                     settings: store.get_settings()
                 });
+            },
+            Cmd::Compress { files, to } => {
+                let current_path = location.current_path();
+                let from = files.into_iter()
+                    .map(|file| current_path.join(file))
+                    .collect::<Vec<_>>();
+
+                Compress::compress(&current_path.join(to), &from);
             },
             Cmd::Back { options } => {
                 location.back(&options);

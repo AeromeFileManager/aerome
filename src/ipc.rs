@@ -25,6 +25,10 @@ use url::Url;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum Cmd {
+    Compress {
+        to: String,
+        files: Vec<String>
+    },
     /// Show developer tools in when not in production
     Dev,
     Initialized,
