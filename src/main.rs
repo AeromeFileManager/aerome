@@ -25,6 +25,7 @@ mod file_transfer;
 mod trash;
 mod location;
 mod compress;
+mod send_to;
 
 use ipc::*;
 use file_transfer::{FileTransferService};
@@ -71,6 +72,8 @@ use prompt::{PromptArgs,EvaluateError,EvaluateResult,evaluate};
 use ai::{ChatError, ChatError::OpenAIError};
 use location::{Location,open};
 use compress::Compress;
+use std::ffi::OsString;
+use send_to::SendTo;
 
 fn main() -> wry::Result<()> {
     env_logger::init();
@@ -219,6 +222,9 @@ fn main() -> wry::Result<()> {
                 };
 
                 location.update(&folder.path, &options);
+            },
+            Cmd::SendTo { files } => {
+                SendTo::email(&location.current_path(), &files);
             },
             Cmd::Settings { settings } => {
                 store.set_account(&settings.account);

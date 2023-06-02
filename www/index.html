@@ -2736,6 +2736,18 @@
                     break;
                 }
 
+                case 'Send To': {
+                    const selected = [ ...document.querySelectorAll('#files > .selected') ]
+                        .map(el => el._name);
+
+                    rpc.invoke({
+                        cmd: 'send_to',
+                        files: selected
+                    });
+                    hideContextMenus();
+                    break;
+                }
+
                 case 'Compress': {
                     const selected = [ ...document.querySelectorAll('#files > .selected') ]
                         .map(el => el._name);

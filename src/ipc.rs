@@ -55,6 +55,9 @@ pub enum Cmd {
     Settings {
         settings: Settings
     },
+    SendTo {
+        files: Vec<String>
+    },
     Trash(TrashCmd),
     Communicate {
         message: String
