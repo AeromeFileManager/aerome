@@ -80,7 +80,7 @@ fn main() -> wry::Result<()> {
     constants::install();
 
     let store = Store::new();
-    let icons = Mutex::new(Icons::new());
+    let icons = Arc::new(Mutex::new(Icons::new()));
     let mime_db = SharedMimeInfo::new();
     let trash = Trash::new();
     let event_loop = EventLoop::<UserEvent>::with_user_event();
@@ -90,7 +90,8 @@ fn main() -> wry::Result<()> {
         &current_dir().unwrap(),
         SharedMimeInfo::new(),
         proxy.clone(),
-        thumbnails.clone());
+        thumbnails.clone(),
+        icons.clone());
     let rt = Runtime::new().unwrap();
     let theme = Icons::get_current_theme_name();
     let file_transfer = FileTransferService::new(proxy.clone());
@@ -256,6 +257,7 @@ fn main() -> wry::Result<()> {
 
     window.set_visible(false);
 
+    let icon_resolver = icons.clone();
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
         .with_background_color((0, 0, 0, 1))
@@ -267,7 +269,7 @@ fn main() -> wry::Result<()> {
             _ => false
         })
         .with_custom_protocol("icon".into(), move |req| {
-            let mut ic = icons.lock().unwrap();
+            let mut ic = icon_resolver.lock().unwrap();
             let icon = req.uri().host().unwrap();
             let size = Url::parse(&format!("{}", req.uri())).unwrap().query_pairs()
                 .find(|(name, _)| &*name == "size")

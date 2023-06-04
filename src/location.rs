@@ -22,7 +22,7 @@ use xdg_mime::{SharedMimeInfo, Guess};
 use wry::application::event_loop::EventLoopProxy;
 use url::Url;
 use tokio::runtime::Runtime;
-use crate::{Thumbnails,UserEvent,Options,Folder,FolderListing,FolderListingType,FileMetadata,Sort};
+use crate::{Icons,Thumbnails,UserEvent,Options,Folder,FolderListing,FolderListingType,FileMetadata,Sort};
 use std::ffi::OsStr;
 use std::cmp::Ordering;
 use notify::{RecursiveMode,Watcher,RecommendedWatcher};
@@ -34,6 +34,7 @@ pub struct Location {
     current: Arc<Mutex<Folder>>,
     debouncer: Arc<Mutex<Debouncer<RecommendedWatcher>>>,
     mime_db: Arc<SharedMimeInfo>,
+    icons: Arc<Mutex<Icons>>,
     options: Arc<Mutex<Options>>,
     thumbnails: Thumbnails,
     proxy: EventLoopProxy<UserEvent>,
@@ -44,15 +45,21 @@ impl Location {
         current: &Path,
         mime_db: SharedMimeInfo,
         proxy: EventLoopProxy<UserEvent>,
-        thumbnails: Thumbnails) -> Self
+        thumbnails: Thumbnails,
+        icons: Arc<Mutex<Icons>>) -> Self
     {
         let (tx, rx) = std::sync::mpsc::channel();
         let debouncer = new_debouncer(Duration::from_millis(100), None, tx).unwrap();
-        let current = Self::get_folder(current, &Options::default(), &mime_db, &thumbnails);
+        let current = {
+            let mut icons = icons.lock().unwrap();
+            Self::get_folder(
+                current, &Options::default(), &mime_db, &thumbnails, &mut icons)
+        };
 
         let options = Options::default();
         let location = Self {
             current: Arc::new(Mutex::new(current)),
+            icons,
             debouncer: Arc::new(Mutex::new(debouncer)),
             mime_db: Arc::new(mime_db),
             options: Arc::new(Mutex::new(options)),
@@ -87,7 +94,8 @@ impl Location {
     }
 
     pub fn update(&self, path: &Path, options: &Options) -> Folder {
-        let folder = Self::get_folder(path, options, &self.mime_db, &self.thumbnails);
+        let mut icons = self.icons.lock().unwrap();
+        let folder = Self::get_folder(path, options, &self.mime_db, &self.thumbnails, &mut icons);
         self.watch(path, options);
         *self.current.lock().unwrap() = folder.clone();
         folder
@@ -181,11 +189,12 @@ impl Location {
         }
     }
 
-    pub fn get_folder(
+    fn get_folder(
         path: &Path,
         options: &Options,
         mime_db: &SharedMimeInfo,
-        thumbnails: &Thumbnails) -> Folder
+        thumbnails: &Thumbnails,
+        icons: &mut Icons) -> Folder
     {
         let files = if path.is_dir() {
             let (mut folders, mut files) = fs::read_dir(&path)
@@ -256,14 +265,16 @@ impl Location {
                 joined
             };
 
+            let theme = Icons::get_current_theme_name();
+
             files.into_iter()
                 .map(|entry| {
                     let name = entry.file_name().to_string_lossy().into_owned();
-                    let icon_url = |entry: DirEntry| {
+                    let mut icon_url = |entry: DirEntry| {
                         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                             Some(get_folder_icon_url(&entry.path()))
                         } else {
-                            Some(get_file_icon_url(&entry.path()))
+                            Some(get_file_icon_url(&theme, &entry.path(), mime_db, icons))
                         }
                     };
                     let ext = name.split('.').rev().next();
@@ -327,21 +338,36 @@ impl Location {
     }
 }
 
-fn get_file_icon_url(path: &Path) -> Url {
-    // TODO
+fn get_file_icon_url(theme: &str, path: &Path, mime_db: &SharedMimeInfo, icons: &mut Icons) -> Url {
+    let names = mime_db
+        .get_mime_types_from_file_name(path.to_str().unwrap())
+        .into_iter()
+        .filter_map(|mime| mime_db.lookup_icon_names(&mime).first().map(|s| s.to_string()))
+        .collect::<Vec<String>>();
+
+    let names_length = names.len();
+    let mut uncached = vec![];
+    for mut icon_name in names {
+        // xdg-mime's default icon here is application-octet-stream. We're changing that to
+        // text-x-generic because it's usually a bit neutral.
+        if names_length == 1 && icon_name == "application-octet-stream" {
+            icon_name = "text-x-generic".to_string();
+        }
+
+        match icons.get_cached(&theme, &icon_name, 256, 1) {
+            Some(Some(_)) => { return Url::parse(&format!("icon://{}", &icon_name)).unwrap() }
+            Some(None) => {}
+            None => { uncached.push(icon_name.clone()); }
+        }
+    }
+
+    for icon_name in uncached.iter() {
+        if let Ok(_) = icons.find(&theme, &icon_name, 256, 1) {
+            return Url::parse(&format!("icon://{}", &icon_name)).unwrap()
+        }
+    }
+
     Url::parse("icon://text-x-generic").unwrap()
-    /*
-     * figured this one out on linux, use the cli program: xdg-mime query filetype {filename}
-     * it'll return the mimetype thats used as an icon we can look up, so just:
-
-     * icon://$(xdg-mime query filetype {filename})
-
-     * will work. The man page has links to the spec, which links to c libraries for mime
-     * lookups. For Mac OS I probably need to import that library and install the entires
-     * /usr/share/mime folder if i want it to work. I could also take a look at how Mac OS
-     * handles mimetypes, but given I've already leaned into the Yaru theme, this is the
-     * faster path
-     */
 }
 
 fn get_folder_icon_url(path: &Path) -> Url {

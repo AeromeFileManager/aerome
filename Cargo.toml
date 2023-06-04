@@ -30,6 +30,7 @@ log = "0.4.17"
 notify = "6.0.0"
 notify-debouncer-mini = "0.3.0"
 zip = "0.6.6"
+rayon = "1.7.0"
 
 [dev-dependencies]
 serial_test = "2.0.0"

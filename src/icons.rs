@@ -16,6 +16,7 @@
 
 use super::constants;
 
+use std::sync::Mutex;
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::env;
@@ -23,6 +24,7 @@ use std::iter;
 use std::collections::HashMap;
 use std::process::{Command,Stdio};
 use std::io::Read;
+use rayon::prelude::*;
 
 // Relevant standards
 // https://specifications.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html
@@ -32,7 +34,7 @@ type ThemeName = String;
 type ThemePath = String;
 
 pub struct Icons {
-    cache: HashMap<Lookup, PathBuf>,
+    cache: HashMap<Lookup, Option<PathBuf>>,
     themes: HashMap<ThemeName, Theme>
 }
 
@@ -82,6 +84,13 @@ impl Icons {
         }
     }
 
+    pub fn get_cached(&self, theme: &str, icon: &str, size: i32, scale: i32)
+        -> Option<&Option<PathBuf>>
+    {
+        let lookup = Lookup::new(theme, icon, size, scale);
+        self.cache.get(&lookup)
+    }
+
     pub fn find(
         &mut self,
         theme: &str,
@@ -91,8 +100,11 @@ impl Icons {
     {
         let lookup = Lookup::new(theme, icon, size, scale);
 
-        if let Some(path) = self.cache.get(&lookup) {
-            return Ok(path.to_owned());
+        if let Some(cached) = self.cache.get(&lookup) {
+            return match cached {
+                Some(path) => Ok(path.to_owned()),
+                None => Err(IconLookupFailure::IconResolutionFailed(lookup))
+            }
         }
 
         let theme = if let Some(theme) = self.themes.get(theme) {
@@ -119,11 +131,18 @@ impl Icons {
         };
 
         if let Some(icon) = find_icon(icon, size, scale, &theme, &fallback) {
-            self.cache.insert(lookup, icon.clone());
+            self.cache.insert(lookup, Some(icon.clone()));
             Ok(icon)
         } else {
+            self.cache.insert(lookup.clone(), None);
             Err(IconLookupFailure::IconResolutionFailed(lookup))
         }
+    }
+
+    pub fn cache_common_mimetypes(&mut self) {
+        let theme = Icons::get_current_theme_name();
+        // TODO
+        //self.find(&theme, "text-html", 256, 1);
     }
 
     #[cfg(target_os = "linux")]
@@ -169,7 +188,7 @@ enum ThemeType {
     Threshold
 }
 
-#[derive(Default, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Hash)]
 struct Lookup {
     icon: String,
     size: i32,
@@ -204,36 +223,51 @@ fn find_icon(icon: &str, size: i32, scale: i32, theme: &Theme, fallback: &Theme)
 fn find_icon_helper(icon: &str, size: i32, scale: i32, theme: &Theme) -> Option<PathBuf> {
     let subdir_list = &theme.directories;
     let basename_list = get_basename_list();
-    let mut closest_filename = None;
-    let mut minimal_size = i32::MAX;
+    let mut closest_filename = Mutex::new(None);
+    let mut minimal_size = Mutex::new(i32::MAX);
 
+    let mut files = vec![];
     for subdir in subdir_list {
         for directory in &basename_list {
             for extension in &["png", "svg", "xpm"] {
-                let subdir_matches_size = directory_matches_size(&subdir, size, scale, theme);
-                let filename = Path::new(directory)
-                    .join(&theme.name)
-                    .join(&subdir)
-                    .join(icon)
-                    .with_extension(extension);
-
-                let filename_exists = filename.exists();
-
-                if filename_exists && subdir_matches_size {
-                    return Some(filename);
-                }
-
-                if let Some(distance) = directory_size_distance(&subdir, size, scale, theme) {
-                    if distance < minimal_size && filename_exists {
-                        closest_filename = Some(filename);
-                        minimal_size = distance;
-                    }
-                }
+                files.push((subdir, directory, extension));
             }
         }
     }
 
-    if let Some(filename) = closest_filename {
+    let found = files.par_iter().position_first(|(subdir, directory, extension)| {
+        let subdir_matches_size = directory_matches_size(&subdir, size, scale, theme);
+        let filename = Path::new(directory)
+            .join(&theme.name)
+            .join(&subdir)
+            .join(icon)
+            .with_extension(extension);
+
+        if filename.exists() {
+            if subdir_matches_size {
+                return true;
+            }
+
+            if let Some(distance) = directory_size_distance(&subdir, size, scale, theme) {
+                let ms = *minimal_size.lock().unwrap();
+
+                if distance < ms {
+                    *closest_filename.lock().unwrap() = Some(filename);
+                    *minimal_size.lock().unwrap() = distance;
+                }
+            }
+        }
+
+        false
+    });
+
+    if let Some((subdir, directory, extension)) = found.map(|i| files[i]) {
+        return Some(Path::new(directory)
+            .join(&theme.name).join(&subdir).join(icon).with_extension(extension));
+    }
+
+    let filename = closest_filename.into_inner().unwrap();
+    if let Some(filename) = filename {
         return Some(filename);
     }
 
@@ -337,11 +371,6 @@ fn get_basename_list() -> Vec<PathBuf> {
         ))
         .filter_map(|dir| dir)
         .collect()
-}
-
-fn get_parent_theme(theme: &str) -> Option<String> {
-    // FIXME: The spec mentions parent themes, but doesn't explain them at all
-    None
 }
 
 #[derive(Debug)]

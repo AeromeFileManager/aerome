@@ -37,6 +37,7 @@ dependencies = [
  "notify-debouncer-mini",
  "png",
  "prompt",
+ "rayon",
  "serde",
  "serde_json",
  "serial_test",
