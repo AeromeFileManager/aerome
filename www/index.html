@@ -2851,6 +2851,7 @@
                 // Empty folder
                 return;
             }
+            const filesOffsetTop = parseInt(getComputedStyle(filesEl).paddingTop);
             const childStyle = getComputedStyle(filesEl.children[0]);
             const childWidth =
                 parseFloat(childStyle.width) +
@@ -2863,7 +2864,9 @@
                 (parseFloat(childStyle.paddingTop) || 0) +
                 (parseFloat(childStyle.paddingBottom) || 0) +
                 (parseFloat(childStyle.marginTop) || 0) +
-                (parseFloat(childStyle.marginBottom) || 0);
+                (parseFloat(childStyle.marginBottom) || 0) +
+                (parseFloat(childStyle.borderTopWidth) || 0) +
+                (parseFloat(childStyle.borderBottomWidth) || 0);
 
             let childRowSize = 0;
             for (const child of filesEl.children) {
@@ -2897,9 +2900,8 @@
                 const rowX1Offset = Math.floor(x1 / childWidth);
                 const rowX2Offset = Math.floor(x2 / childWidth);
 
-                const y1 = parseInt(boxEl.style.top);
+                const y1 = parseInt(boxEl.style.top) - filesOffsetTop;
                 const y2 = parseInt(boxEl.style.height) + y1;
-                const boxTotalHeight = childBoxSize.height + childBoxSize.top;
 
                 const rowY1Offset = Math.floor(y1 / childHeight);
                 const rowY2Offset = Math.floor(y2 / childHeight) + 1;
