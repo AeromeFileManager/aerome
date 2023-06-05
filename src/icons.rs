@@ -16,15 +16,17 @@
 
 use super::constants;
 
-use std::sync::Mutex;
-use std::path::{Path, PathBuf};
-use std::fs;
+use rayon::prelude::*;
+use serde::{Serialize,Deserialize};
+use std::sync::{Arc,Mutex};
+use std::path::{Path,PathBuf};
+use std::fs::{self,File};
 use std::env;
 use std::iter;
 use std::collections::HashMap;
 use std::process::{Command,Stdio};
 use std::io::Read;
-use rayon::prelude::*;
+use std::time::{Duration,Instant,SystemTime,UNIX_EPOCH};
 
 // Relevant standards
 // https://specifications.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html
@@ -32,14 +34,169 @@ use rayon::prelude::*;
 
 type ThemeName = String;
 type ThemePath = String;
+type FindResult = Result<PathBuf, IconLookupFailure>;
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Icons {
-    cache: HashMap<Lookup, Option<PathBuf>>,
-    themes: HashMap<ThemeName, Theme>
+    cache: Arc<Mutex<HashMap<Lookup, Option<PathBuf>>>>,
+    cache_mtime: Arc<Mutex<u64>>,
+    cache_mtime_last_check: Arc<Mutex<u64>>,
+    cache_is_stale: Arc<Mutex<bool>>,
+    current_theme_name: Arc<Mutex<String>>,
+    themes: Arc<Mutex<HashMap<ThemeName, Theme>>>
 }
 
 impl Icons {
+    pub fn new_from_cbor() -> Self {
+        let cache_dir = dirs::cache_dir().unwrap().join(constants::APP_NAME);
+        let cache_file = File::open(cache_dir.join("icons.cache")).ok();
+
+        cache_file
+            .and_then(|cache_file| {
+                serde_cbor::from_reader(cache_file).ok()
+            })
+            .unwrap_or_else(|| {
+                Icons::new()
+            })
+    }
+
     pub fn new() -> Self {
+        let icons = Icons {
+            cache: Arc::new(Mutex::new(HashMap::new())),
+            themes: Arc::new(Mutex::new(Icons::create_default_themes())),
+            cache_mtime: Arc::new(Mutex::new(0)),
+            cache_mtime_last_check: Arc::new(Mutex::new(0)),
+            cache_is_stale: Arc::new(Mutex::new(false)),
+            current_theme_name: Arc::new(Mutex::new(Icons::get_current_theme_name()))
+        };
+        icons.flush_cache();
+        icons
+    }
+
+    pub fn get_cached(&self, icon: &str, size: i32, scale: i32) -> Option<Option<PathBuf>> {
+        let theme = self.current_theme_name.lock().unwrap();
+        let lookup = Lookup::new(&*theme, icon, size, scale);
+        let cache = self.cache.lock().unwrap();
+
+        cache.get(&lookup).cloned()
+    }
+
+    pub fn get_cache_mtime(&self) -> u64 {
+        *self.cache_mtime.lock().unwrap()
+    }
+
+    pub fn find(&self, icon: &str, size: i32, scale: i32) -> FindResult {
+        if self.cache_is_stale() {
+            self.flush_cache();
+        }
+
+        let mut cache = self.cache.lock().unwrap();
+        let mut themes = self.themes.lock().unwrap();
+        let theme = self.current_theme_name.lock().unwrap();
+        let lookup = Lookup::new(&theme, icon, size, scale);
+
+        if let Some(cached) = cache.get(&lookup) {
+            return match cached {
+                Some(path) => {
+                    Ok(path.to_owned())
+                },
+                None => Err(IconLookupFailure::IconResolutionFailed(lookup))
+            }
+        }
+
+        let theme = if let Some(theme) = themes.get(&theme.clone()) {
+            theme.clone()
+        } else {
+            let mut theme = Theme::load(&theme)
+                .ok_or(IconLookupFailure::ThemeMissing(theme.to_owned()))?;
+
+            theme.inherits.push(themes.get(constants::FILE_MANAGER_THEME_NAME).unwrap().clone());
+            themes.insert(theme.name.clone(), theme.clone());
+            theme
+        };
+
+        let fallback = if let Some(theme) = themes.get("hicolor") {
+            theme.clone()
+        } else {
+            let theme = Theme::load("hicolor")
+                .ok_or(IconLookupFailure::ThemeMissing("hicolor".to_owned()))?;
+
+            themes.insert("hicolor".to_owned(), theme.clone());
+            theme
+        };
+
+        if let Some(icon) = find_icon(icon, size, scale, &theme, &fallback) {
+            cache.insert(lookup, Some(icon.clone()));
+            Ok(icon)
+        } else {
+            cache.insert(lookup.clone(), None);
+            Err(IconLookupFailure::IconResolutionFailed(lookup))
+        }
+    }
+
+    fn flush_cache(&self) {
+        *self.cache_is_stale.lock().unwrap() = false;
+        *self.cache.lock().unwrap() = HashMap::new();
+        *self.themes.lock().unwrap() = Icons::create_default_themes();
+        self.cache_common_mimetypes();
+    }
+
+    pub fn cache_is_stale(&self) -> bool {
+        let mut last_check = self.cache_mtime_last_check.lock().unwrap();
+        let duration_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let seconds_since_epoch = duration_since_epoch.as_secs() as u64;
+
+        if seconds_since_epoch - *last_check < 5 {
+            return *self.cache_is_stale.lock().unwrap();
+        }
+
+        let mut last_theme = self.current_theme_name.lock().unwrap();
+        let mut current_theme = Icons::get_current_theme_name();
+        let mut cache_mtime = self.cache_mtime.lock().unwrap();
+        let mut cache_is_stale = self.cache_is_stale.lock().unwrap();
+
+        if current_theme != *last_theme {
+            *last_theme = current_theme;
+            *last_check = seconds_since_epoch;
+            *cache_mtime = seconds_since_epoch;
+            *cache_is_stale = true;
+            return true;
+        }
+
+        *last_check = seconds_since_epoch;
+        false
+    }
+
+    pub fn cache_common_mimetypes(&self) {
+        let this = self.clone();
+
+        std::thread::spawn(move || {
+            for mimetype in constants::COMMON_MIME_TYPES.iter() {
+                this.find(mimetype, 256, 1);
+            }
+        });
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn get_current_theme_name() -> String {
+        let mut cmd = Command::new("gsettings")
+            .args(&["get", "org.gnome.desktop.interface", "icon-theme"])
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        let mut stdout = cmd.stdout.take().unwrap();
+        let mut result = String::new();
+        stdout.read_to_string(&mut result).unwrap();
+        result.replace("'", "").trim().to_string()
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn get_current_theme_name() -> String {
+        String::from(constants::FILE_MANAGER_THEME_NAME)
+    }
+
+    fn create_default_themes() -> HashMap<ThemeName, Theme> {
         let mut themes = HashMap::new();
 
         themes.insert(constants::FILE_MANAGER_THEME_NAME.into(), Theme {
@@ -78,94 +235,23 @@ impl Icons {
             });
         }
 
-        Icons {
-            cache: HashMap::new(),
-            themes
-        }
-    }
-
-    pub fn get_cached(&self, theme: &str, icon: &str, size: i32, scale: i32)
-        -> Option<&Option<PathBuf>>
-    {
-        let lookup = Lookup::new(theme, icon, size, scale);
-        self.cache.get(&lookup)
-    }
-
-    pub fn find(
-        &mut self,
-        theme: &str,
-        icon: &str,
-        size: i32,
-        scale: i32) -> Result<PathBuf, IconLookupFailure>
-    {
-        let lookup = Lookup::new(theme, icon, size, scale);
-
-        if let Some(cached) = self.cache.get(&lookup) {
-            return match cached {
-                Some(path) => Ok(path.to_owned()),
-                None => Err(IconLookupFailure::IconResolutionFailed(lookup))
-            }
-        }
-
-        let theme = if let Some(theme) = self.themes.get(theme) {
-            theme.clone()
-        } else {
-            let mut theme = Theme::load(theme)
-                .ok_or(IconLookupFailure::ThemeMissing(theme.to_owned()))?;
-
-            theme.inherits.push(self.themes
-                .get(constants::FILE_MANAGER_THEME_NAME).unwrap().clone()
-            );
-            self.themes.insert(theme.name.clone(), theme.clone());
-            theme
-        };
-
-        let fallback = if let Some(theme) = self.themes.get("hicolor") {
-            theme.clone()
-        } else {
-            let theme = Theme::load("hicolor")
-                .ok_or(IconLookupFailure::ThemeMissing("hicolor".to_owned()))?;
-
-            self.themes.insert("hicolor".to_owned(), theme.clone());
-            theme
-        };
-
-        if let Some(icon) = find_icon(icon, size, scale, &theme, &fallback) {
-            self.cache.insert(lookup, Some(icon.clone()));
-            Ok(icon)
-        } else {
-            self.cache.insert(lookup.clone(), None);
-            Err(IconLookupFailure::IconResolutionFailed(lookup))
-        }
-    }
-
-    pub fn cache_common_mimetypes(&mut self) {
-        let theme = Icons::get_current_theme_name();
-        // TODO
-        //self.find(&theme, "text-html", 256, 1);
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn get_current_theme_name() -> String {
-        let mut cmd = Command::new("gsettings")
-            .args(&["get", "org.gnome.desktop.interface", "icon-theme"])
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-
-        let mut stdout = cmd.stdout.take().unwrap();
-        let mut result = String::new();
-        stdout.read_to_string(&mut result).unwrap();
-        result.replace("'", "").trim().to_string()
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    pub fn get_current_theme_name() -> String {
-        String::from(constants::FILE_MANAGER_THEME_NAME)
+        themes
     }
 }
 
-#[derive(Clone, Debug, Default)]
+impl Drop for Icons {
+    fn drop(&mut self) {
+        let cache_dir = dirs::cache_dir().unwrap().join(constants::APP_NAME);
+        if !cache_dir.exists() {
+            fs::create_dir_all(&cache_dir).unwrap();
+        }
+
+        let cache_file = File::create(cache_dir.join("icons.cache")).unwrap();
+        serde_cbor::to_writer(cache_file, &self).unwrap();
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct Theme {
     name: String,
     directories: Vec<String>,
@@ -173,14 +259,14 @@ struct Theme {
     context: HashMap<ThemePath, ThemeContext>
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct ThemeContext {
     context: String,
     size: i32,
     r#type: ThemeType
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 enum ThemeType {
     #[default]
     Fixed,
@@ -188,8 +274,8 @@ enum ThemeType {
     Threshold
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq, Hash)]
-struct Lookup {
+#[derive(Clone, Default, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Lookup {
     icon: String,
     size: i32,
     scale: i32,
@@ -197,7 +283,7 @@ struct Lookup {
 }
 
 impl Lookup {
-    fn new(theme: impl Into<String>, icon: impl Into<String>, size: i32, scale: i32) -> Self {
+    fn new(theme: &str, icon: &str, size: i32, scale: i32) -> Self {
         Lookup { theme: theme.into(), icon: icon.into(), size, scale }
     }
 }

@@ -27,14 +27,14 @@ use std::ffi::OsStr;
 use std::cmp::Ordering;
 use notify::{RecursiveMode,Watcher,RecommendedWatcher};
 use notify_debouncer_mini::{new_debouncer,Debouncer,DebounceEventResult};
-use std::time::Duration;
+use std::time::{Duration,SystemTime,UNIX_EPOCH};
 
 #[derive(Clone)]
 pub struct Location {
     current: Arc<Mutex<Folder>>,
     debouncer: Arc<Mutex<Debouncer<RecommendedWatcher>>>,
     mime_db: Arc<SharedMimeInfo>,
-    icons: Arc<Mutex<Icons>>,
+    icons: Icons,
     options: Arc<Mutex<Options>>,
     thumbnails: Thumbnails,
     proxy: EventLoopProxy<UserEvent>,
@@ -46,14 +46,13 @@ impl Location {
         mime_db: SharedMimeInfo,
         proxy: EventLoopProxy<UserEvent>,
         thumbnails: Thumbnails,
-        icons: Arc<Mutex<Icons>>) -> Self
+        icons: Icons) -> Self
     {
         let (tx, rx) = std::sync::mpsc::channel();
         let debouncer = new_debouncer(Duration::from_millis(100), None, tx).unwrap();
         let current = {
-            let mut icons = icons.lock().unwrap();
             Self::get_folder(
-                current, &Options::default(), &mime_db, &thumbnails, &mut icons)
+                current, &Options::default(), &mime_db, &thumbnails, &icons)
         };
 
         let options = Options::default();
@@ -94,8 +93,7 @@ impl Location {
     }
 
     pub fn update(&self, path: &Path, options: &Options) -> Folder {
-        let mut icons = self.icons.lock().unwrap();
-        let folder = Self::get_folder(path, options, &self.mime_db, &self.thumbnails, &mut icons);
+        let folder = Self::get_folder(path, options, &self.mime_db, &self.thumbnails, &self.icons);
         self.watch(path, options);
         *self.current.lock().unwrap() = folder.clone();
         folder
@@ -194,7 +192,7 @@ impl Location {
         options: &Options,
         mime_db: &SharedMimeInfo,
         thumbnails: &Thumbnails,
-        icons: &mut Icons) -> Folder
+        icons: &Icons) -> Folder
     {
         let files = if path.is_dir() {
             let (mut folders, mut files) = fs::read_dir(&path)
@@ -259,13 +257,13 @@ impl Location {
                                 (Some(a), Some(b)) => a.cmp(&b),
                                 _ => Ordering::Equal
                             }
-                        },
+                        }
                     }
                 });
                 joined
             };
 
-            let theme = Icons::get_current_theme_name();
+            let cache_mtime = icons.get_cache_mtime();
 
             files.into_iter()
                 .map(|entry| {
@@ -274,7 +272,7 @@ impl Location {
                         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                             Some(get_folder_icon_url(&entry.path()))
                         } else {
-                            Some(get_file_icon_url(&theme, &entry.path(), mime_db, icons))
+                            Some(get_file_icon_url(&entry.path(), mime_db, icons))
                         }
                     };
                     let ext = name.split('.').rev().next();
@@ -292,7 +290,7 @@ impl Location {
                         .file_name(&name)
                         .guess();
 
-                    let graphic = match (guess.uncertain(), guess.mime_type()) {
+                    let mut graphic = match (guess.uncertain(), guess.mime_type()) {
                         (false, mime) if mime.type_() == mime::IMAGE => {
                             let path = entry.path();
 
@@ -304,11 +302,11 @@ impl Location {
                         _ => icon_url(entry),
                     };
 
-                    FolderListing {
-                        name,
-                        kind,
-                        graphic
+                    if let Some(graphic) = &mut graphic {
+                        graphic.set_query(Some(&format!("v={}", cache_mtime)));
                     }
+
+                    FolderListing { name, kind, graphic }
                 })
                 .collect::<Vec<FolderListing>>()
         } else {
@@ -338,7 +336,7 @@ impl Location {
     }
 }
 
-fn get_file_icon_url(theme: &str, path: &Path, mime_db: &SharedMimeInfo, icons: &mut Icons) -> Url {
+fn get_file_icon_url(path: &Path, mime_db: &SharedMimeInfo, icons: &Icons) -> Url {
     let names = mime_db
         .get_mime_types_from_file_name(path.to_str().unwrap())
         .into_iter()
@@ -347,22 +345,27 @@ fn get_file_icon_url(theme: &str, path: &Path, mime_db: &SharedMimeInfo, icons: 
 
     let names_length = names.len();
     let mut uncached = vec![];
-    for mut icon_name in names {
-        // xdg-mime's default icon here is application-octet-stream. We're changing that to
-        // text-x-generic because it's usually a bit neutral.
-        if names_length == 1 && icon_name == "application-octet-stream" {
-            icon_name = "text-x-generic".to_string();
-        }
 
-        match icons.get_cached(&theme, &icon_name, 256, 1) {
-            Some(Some(_)) => { return Url::parse(&format!("icon://{}", &icon_name)).unwrap() }
-            Some(None) => {}
-            None => { uncached.push(icon_name.clone()); }
+    if !icons.cache_is_stale() {
+        for mut icon_name in names {
+            // xdg-mime's default icon here is application-octet-stream. We're changing that to
+            // text-x-generic because it's usually a bit neutral.
+            if names_length == 1 && icon_name == "application-octet-stream" {
+                icon_name = "text-x-generic".to_string();
+            }
+
+            match icons.get_cached(&icon_name, 256, 1) {
+                Some(Some(_)) => { return Url::parse(&format!("icon://{}", &icon_name)).unwrap() }
+                Some(None) => {}
+                None => { uncached.push(icon_name.clone()); }
+            }
         }
+    } else {
+        uncached = names;
     }
 
     for icon_name in uncached.iter() {
-        if let Ok(_) = icons.find(&theme, &icon_name, 256, 1) {
+        if let Ok(_) = icons.find(&icon_name, 256, 1) {
             return Url::parse(&format!("icon://{}", &icon_name)).unwrap()
         }
     }
@@ -384,7 +387,7 @@ fn get_folder_icon_url(path: &Path) -> Url {
         (4, [_, "home", _, "Public"]) => Url::parse("icon://folder-publicshare").unwrap(),
         (4, [_, "home", _, "Templates"]) => Url::parse("icon://folder-templates").unwrap(),
         (4, [_, "home", _, "Videos"]) => Url::parse("icon://folder-videos").unwrap(),
-        _ => Url::parse("icon://folder").unwrap()
+        _ => Url::parse(&format!("icon://folder")).unwrap()
     }
 }
 

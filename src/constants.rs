@@ -115,6 +115,38 @@ pub const APP_ICON_MIMETYPE_TEXT_X_GENERIC: &'static [u8] =
 pub const APP_ICON_MIMETYPE_APPLICATION_X_ZIP: &'static [u8] =
     include_bytes!("../assets/Yaru/mimetypes/application-x-zip.png");
 
+pub const COMMON_MIME_TYPES: [&str; 29] = [
+    "folder",
+    "folder-music",
+    "folder-pictures",
+    "folder-documents",
+    "folder-download",
+    "user-desktop",
+    "folder-publicshare",
+    "folder-templates",
+    "folder-videos",
+    "text-plain",
+    "text-html",
+    "application-json",
+    "application-xml",
+    "application-pdf",
+    "image-jpeg",
+    "image-png",
+    "audio-mpeg",
+    "audio-ogg",
+    "video-mp4",
+    "video-quicktime",
+    "application-octet-stream",
+    "application-vnd.ms-excel",
+    "application-vnd.ms-powerpoint",
+    "application-vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application-x-www-form-urlencoded",
+    "multipart-form-data",
+    "application-zip",
+    "application-javascript",
+    "text-css",
+];
+
 pub fn install() {
     install_icons();
     install_prompts();

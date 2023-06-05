@@ -80,7 +80,7 @@ fn main() -> wry::Result<()> {
     constants::install();
 
     let store = Store::new();
-    let icons = Arc::new(Mutex::new(Icons::new()));
+    let icons = Icons::new_from_cbor();
     let mime_db = SharedMimeInfo::new();
     let trash = Trash::new();
     let event_loop = EventLoop::<UserEvent>::with_user_event();
@@ -93,7 +93,6 @@ fn main() -> wry::Result<()> {
         thumbnails.clone(),
         icons.clone());
     let rt = Runtime::new().unwrap();
-    let theme = Icons::get_current_theme_name();
     let file_transfer = FileTransferService::new(proxy.clone());
 
     let handler = move |window: &Window, req: String| {
@@ -204,7 +203,7 @@ fn main() -> wry::Result<()> {
                         fs::create_dir(&to).unwrap();
                         fs::rename(from, to).unwrap();
                     },
-                    (Some(FolderListing { kind, ..}), None) => {
+                    (Some(FolderListing { kind, .. }), None) => {
                         let from = folder.path.join(from);
                         let to = folder.path.join(to);
                         fs::rename(from, to).unwrap();
@@ -257,7 +256,6 @@ fn main() -> wry::Result<()> {
 
     window.set_visible(false);
 
-    let icon_resolver = icons.clone();
     let webview = WebViewBuilder::new(window)?
         .with_html(include_str!("../www/index.html"))?
         .with_background_color((0, 0, 0, 1))
@@ -269,17 +267,16 @@ fn main() -> wry::Result<()> {
             _ => false
         })
         .with_custom_protocol("icon".into(), move |req| {
-            let mut ic = icon_resolver.lock().unwrap();
             let icon = req.uri().host().unwrap();
             let size = Url::parse(&format!("{}", req.uri())).unwrap().query_pairs()
                 .find(|(name, _)| &*name == "size")
                 .map(|(_, val)| val.to_owned().parse::<i32>().unwrap())
                 .unwrap_or(256);
 
-            let path = ic.find(&theme, icon, size, 1)
+            let path = icons.find(icon, size, 1)
                 .or_else(|_| {
-                    eprintln!("Couldn't find {icon} with {size} in {}", theme);
-                    ic.find(&theme, "error-symbolic", 32, 1)
+                    eprintln!("Couldn't find {icon} with {size}");
+                    icons.find("error-symbolic", 32, 1)
                 })
                 .unwrap();
 
