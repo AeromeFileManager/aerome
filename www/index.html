@@ -27,6 +27,56 @@
         cursor: text;
     }
 
+    input:focus:is([type="email"], [type="password"], [type="password"], [type="text"], :not([type])) {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--secondary-pop-semi-transparent);
+    }
+
+    label, input[type="checkbox"] {
+       line-height: 3ex;
+    }
+
+    input[type="checkbox"] {
+        position: absolute;
+        left: -999em;
+    }
+
+    input[type="checkbox"] + label {
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+    }
+
+    input[type="checkbox"] + label::before {
+       content: "";
+       display: inline-block;
+       vertical-align: -25%;
+       height: 2ex;
+       width: 2ex;
+       background-color: var(--secondary-bg);
+       border: 1px solid rgb(166, 166, 166);
+       border-radius: 4px;
+       margin-right: 0.5em;
+    }
+
+    input[type="checkbox"]:checked + label::before {
+       background-color: var(--secondary-pop);
+    }
+
+    input[type="checkbox"]:checked + label::after {
+       content: '';
+       position: absolute;
+       width: 1.2ex;
+       height: 0.4ex;
+       background: rgba(0, 0, 0, 0);
+       top: 0.9ex;
+       left: 0.4ex;
+       border: 3px solid var(--secondary-bg);
+       border-top: none;
+       border-right: none;
+       transform: rotate(-45deg);
+    }
+
     @keyframes open {
         0% { opacity: 0 }
         100% { opacity: 1 }
@@ -205,7 +255,8 @@
         color: var(--secondary-pop);
     }
 
-    header .menu .content form > :is(input, label) {
+    header .menu .content form > :is(input, label),
+    header .menu .content form > :has(input[type="checkbox"]) {
         margin-bottom: 20px;
     }
 
@@ -1174,15 +1225,15 @@
 
             <p>Please read and agree to the <a href="https://aerome.net/tos.html" target="_blank">Terms of Service</a> and our <a href="https://aerome.net/privacy_policy.html" target="_blank">Privacy Policy</a> before continuing.</p>
 
-            <label>
+            <div>
                 <input type="checkbox" id="sign-up-tos-confirmation" required>
-                I agree to the Terms of Service
-            </label>
+                <label for="sign-up-tos-confirmation">I agree to the Terms of Service</label>
+            </div>
 
-            <label>
+            <div>
                 <input type="checkbox" id="sign-up-pp-confirmation" required>
-                I have read the Privacy Policy
-            </label>
+                <label for="sign-up-pp-confirmation">I have read the Privacy Policy</label>
+            </div>
 
             <div class="sign-up-select-type">
                 <div class="sign-up-select-item" id="sign-up-select-byok">
@@ -1344,17 +1395,17 @@
                             <input type="radio" name="sort" value="date" />
                         </fieldset>
 
-                        <label>
+                        <div>
                             <input id="sort_folders_first" type="checkbox" name="folders_first"
                                 onchange="future.options.sortFoldersFirst = this.checked" />
-                            Folders first
-                        </label>
+                            <label for="sort_folders_first">Folders first</label>
+                        </div>
 
-                        <label>
+                        <div>
                             <input id="sort_show_hidden" type="checkbox" name="show_hidden"
                                 onchange="future.options.sortShowHidden = this.checked" />
-                            Show hidden
-                        </label>
+                            <label for="sort_show_hidden">Show hidden</label>
+                        </div>
 
                         <button id="show-account-information">
                             Account
