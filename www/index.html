@@ -1215,7 +1215,7 @@
 
             <div class="stripe-lookalike-entry">
                 <label for="sign-up-open-ai-key"> Key </label>
-                <input name="key" id="sign-up-open-ai-key" />
+                <input name="key" id="sign-up-open-ai-key" data-allow-native-contextmenu />
             </div>
 
             <button type="submit">Save</button>
@@ -1230,17 +1230,17 @@
 
             <div class="stripe-lookalike-entry">
                 <label for="sign-up-email"> Email </label>
-                <input type="email" name="email" id="sign-up-email" />
+                <input type="email" name="email" id="sign-up-email" data-allow-native-contextmenu/>
             </div>
 
             <div class="stripe-lookalike-entry">
                 <label> Password: </label>
-                <input type="password" name="password" />
+                <input type="password" name="password" data-allow-native-contextmenu />
             </div>
 
             <div class="stripe-lookalike-entry">
                 <label> Confirm Password: </label>
-                <input type="password" name="confirm_password" />
+                <input type="password" name="confirm_password" data-allow-native-contextmenu />
             </div>
 
             <button type="submit">Create Account</button>
@@ -1255,12 +1255,12 @@
 
             <div class="stripe-lookalike-entry">
                 <label for="sign-up-email"> Email </label>
-                <input type="email" name="email" id="sign-up-email" />
+                <input type="email" name="email" id="sign-up-email" data-allow-native-contextmenu />
             </div>
 
             <div class="stripe-lookalike-entry">
                 <label> Password: </label>
-                <input type="password" name="password" />
+                <input type="password" name="password" data-allow-native-contextmenu />
             </div>
 
             <button type="submit">Sign Into Account</button>
@@ -1276,7 +1276,7 @@
 
             <div class="stripe-lookalike-entry">
                 <label for="account-information-direct-key"> Key </label>
-                <input name="key" id="account-information-direct-key" />
+                <input name="key" id="account-information-direct-key" data-allow-native-contextmenu />
             </div>
 
             <button>Log Out</button>
@@ -1427,7 +1427,7 @@
 
         <div id="action-wrapper"></div>
 
-        <input type="text" id="action" />
+        <input type="text" id="action" data-allow-native-contextmenu />
 
         <button id="action-suggestions">Suggestions</button>
         <button id="action-submit">Conversation</button>
@@ -2582,11 +2582,16 @@
         }
 
         window.addEventListener('contextmenu', e => {
-            e.preventDefault();
+            if (e.target.matches('input[data-allow-native-contextmenu]')) {
+                return;
+            }
 
             if (!e.target.closest('.files-wrapper')) {
-                return
+                e.preventDefault();
+                return;
             }
+
+            e.preventDefault();
 
             const hasSelectedFiles = document.getElementById('files').querySelector('.selected');
             if (hasSelectedFiles) {
