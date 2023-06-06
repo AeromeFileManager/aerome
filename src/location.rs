@@ -415,7 +415,7 @@ pub fn open(path: impl AsRef<OsStr>) -> bool {
 
 #[cfg(target_os = "macos")]
 pub fn open(path: impl AsRef<OsStr>) -> bool {
-    let mut child = Command::new("xdg-open")
+    let mut child = Command::new("open")
         .args(&[ path ])
         .stdin(Stdio::null())
         .stderr(Stdio::null())
