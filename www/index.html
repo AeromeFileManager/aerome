@@ -31,7 +31,8 @@
         cursor: text;
     }
 
-    input:focus:is([type="email"], [type="password"], [type="password"], [type="text"], :not([type])) {
+    input:focus:is([type="email"], [type="password"], [type="password"], [type="text"], :not([type])),
+    [contenteditable]:focus-visible {
         outline: none;
         box-shadow: 0 0 0 2px var(--secondary-pop-semi-transparent);
     }
