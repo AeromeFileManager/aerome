@@ -136,6 +136,8 @@
         --primary-bg: var(--color-raisin-black);
         --primary-bg-semi-transparent: var(--color-raisin-black-semi-transparent);
 
+        --primary-pop: color-mix(in srgb, var(--primary-bg) 65%, var(--primary-fg));
+
         --primary-fg: var(--color-antique-white);
         --primary-fg-semi-transparent: var(--color-antique-white-semi-transparent);
 
@@ -151,8 +153,6 @@
 
     body {
         --window-drop-shadow-margin: 10px;
-        --header-compressed-height: 20px;
-        --header-large-height: 48px;
 
         height: 100%;
         overflow: hidden;
@@ -172,6 +172,10 @@
         display: flex;
         flex-direction: column;
         transition: filter 0.5s ease-in-out;
+
+        --header-compressed-height: 20px;
+        --header-large-height: 48px;
+        --header-height: var(--header-large-height);
     }
 
     body > main > :is(.files-wrapper, .action-wrapper, #action-suggestions, #action-submit, #action-sibling, #action),
@@ -186,6 +190,7 @@
     }
 
     header {
+        background: var(--primary-bg-semi-transparent);
         position: fixed;
         left: var(--window-drop-shadow-margin);
         right: var(--window-drop-shadow-margin);
@@ -199,17 +204,14 @@
         border-top-right-radius: 10px;
         border-top-left-radius: 10px;
         z-index: 1;
-
-        --header-height: 48px;
     }
 
     header.compressed {
-        --header-height: var(--header-compressed-height);
-        background: var(--primary-bg-semi-transparent);
         /*
         -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px);
         */
+        --header-height: var(--header-compressed-height);
     }
 
     header .menu.hamburger {
@@ -370,7 +372,7 @@
         transition: background 0.3s ease-in-out, height 0.2s ease-in-out, top 0.2s ease-in-out;
     }
 
-    header.compressed button#back {
+    main header.compressed button#back {
         background: transparent;
         border: 0.1px solid var(--primary-fg-semi-transparent);
         color: var(--color-offwhite);
@@ -390,6 +392,29 @@
         min-height: calc(100vh - 38px);
         max-height: calc(100vh - 38px);
         position: relative;
+
+        --scrollbar-width: 8px;
+    }
+
+    .files-wrapper::-webkit-scrollbar {
+        width: var(--scrollbar-width);
+        background-color: transparent;
+    }
+
+    .files-wrapper::-webkit-scrollbar-track-piece {
+        /* The height of the header was tried here, but the scrollbar moving up and down
+         * was a little jarring, so we're just using a fixed offset
+         */
+        margin-top: 58px;
+        margin-bottom: 24px;
+    }
+
+    .files-wrapper::-webkit-scrollbar-thumb {
+        background: linear-gradient(90deg, transparent 0%, transparent 35%, var(--primary-pop) 50%);
+    }
+
+    .files-wrapper::-webkit-scrollbar-thumb:hover {
+        background: var(--primary-pop);
     }
 
     .spacer {
@@ -449,7 +474,7 @@
 
     ul#files > li.selected {
         background: var(--secondary-fg-semi-transparent);
-        border: 1px solid color-mix(in srgb, var(--primary-bg) 85%, var(--primary-fg));
+        border: 1px solid var(--primary-pop);
     }
 
     ul#files > li:hover > .image {
@@ -2007,10 +2032,8 @@
 
             if (offset > 30) {
                 header.classList.add('compressed');
-                //header.style.setProperty('--header-height', '--header-height-comp');
             } else {
                 header.classList.remove('compressed');
-                //header.style.setProperty('--header-height', '20px');
             }
         });
 
@@ -2894,12 +2917,23 @@
             files.setAttribute('inert', true);
         }
 
+        const DROP_SHADOW_MARGIN = parseInt(getComputedStyle(document.body)
+            .getPropertyValue('--window-drop-shadow-margin'));
+
         document.querySelector('.files-wrapper').addEventListener('pointerdown', e => {
             if (!e.target.matches('.files-wrapper, #files, li')) return;
 
             const filesEl = document.getElementById('files');
             const scrollEl = filesEl.parentElement;
             const boxEl = document.getElementById('dnd-visual-box');
+
+            const filesComputedStyle = getComputedStyle(filesEl);
+            const filesScrollBarWidth = parseInt(filesComputedStyle.getPropertyValue('--scrollbar-width'));
+
+            // We don't start a drag if we're inside the scrollbars area
+            if (window.innerWidth - e.x - DROP_SHADOW_MARGIN <= filesScrollBarWidth) {
+                return;
+            }
 
             const startX = e.pageX;
             const startY = e.pageY;
@@ -2912,7 +2946,7 @@
                 // Empty folder
                 return;
             }
-            const filesOffsetTop = parseInt(getComputedStyle(filesEl).paddingTop);
+            const filesOffsetTop = parseInt(filesComputedStyle.paddingTop);
             const childStyle = getComputedStyle(filesEl.children[0]);
             const childWidth =
                 parseFloat(childStyle.width) +
