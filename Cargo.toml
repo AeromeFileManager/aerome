@@ -37,7 +37,8 @@ serde_cbor = "0.11.2"
 serial_test = "2.0.0"
 
 [package.metadata.bundle]
-identifier = "com.prlang.future"
+name = "Aerome"
+identifier = "net.aerome.filemanager"
 icon = [
     "assets/icon/icon.png"
 ]
