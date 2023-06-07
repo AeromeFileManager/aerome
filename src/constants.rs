@@ -82,6 +82,9 @@ pub const APP_ICON_SCALABLE_ERROR_SYMBOLIC: &'static [u8] =
 pub const APP_ICON_SCALABLE_GO_DOWN_SYMBOLIC: &'static [u8] =
     include_bytes!("../assets/Yaru/scalable/go-down-symbolic.svg");
 
+pub const APP_ICON_SCALABLE_GO_PREVIOUS_SYMBOLIC: &'static [u8] =
+    include_bytes!("../assets/Yaru/scalable/go-previous-symbolic.svg");
+
 pub const APP_ICON_SCALABLE_IMAGE_MISSING_SYMBOLIC: &'static [u8] =
     include_bytes!("../assets/Yaru/scalable/image-missing-symbolic.svg");
 
@@ -283,6 +286,10 @@ fn install_icons() {
     fs::write(
         scalable_dir.join("./go-down-symbolic.svg"),
         APP_ICON_SCALABLE_GO_DOWN_SYMBOLIC).unwrap();
+
+    fs::write(
+        scalable_dir.join("./go-previous-symbolic.svg"),
+        APP_ICON_SCALABLE_GO_PREVIOUS_SYMBOLIC).unwrap();
 
     fs::write(
         scalable_dir.join("./image-missing-symbolic.svg"),
