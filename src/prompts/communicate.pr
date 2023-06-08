@@ -7,20 +7,7 @@ command
         required.
 {
     match $AI {
-        (?s:```(?:bash|sh)?\s*(?:#!/bin/bash)?\s*(.*)\s*```) =>
-            `echo $1` -> command_double_checker,
-
-        (?s:.*) =>
-            `echo -e "$0" >> failures/command`
+        (?s:```(?:bash|sh)?\s*(?:#!/bin/bash)?\s*(.*)\s*```) => `echo "SUCCESS:$1"`,
+        (?s:.*) => `echo -e "$0" >> failures/command`
     }
-}
-
-command_double_checker
-    history: false
-    temperature: 0
-    description: >
-        Can you check this bash script for syntax errors and correct it? Output
-        JUST THE SCRIPT as your response.
-{
-    `echo "SUCCESS:$1"`
 }
