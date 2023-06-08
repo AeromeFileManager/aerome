@@ -197,6 +197,7 @@ pub enum UserEvent {
     DevTools,
     ExecEval(),
     FileTransferProgress(FileTransfer),
+    SetSubscriptionsServer(SubscriptionServer),
     UpdateFileDeepLook {
         file: FileMetadata
     },
@@ -224,6 +225,12 @@ pub enum UserEvent {
 pub struct ThumbnailUpdate {
     pub name: String,
     pub url: Url
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionServer {
+    pub url: String
 }
 
 #[derive(Debug, Deserialize, Serialize)]

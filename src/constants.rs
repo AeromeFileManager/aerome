@@ -21,8 +21,11 @@ use std::path::PathBuf;
 use std::process::Command;
 pub use super::prompts::*;
 
-
-pub const BACKEND_URL: &'static str = "http://localhost:9008";
+pub const SUBSCRIPTIONS_SERVER_URL: &'static str = if cfg!(debug_assertions) {
+    "http://localhost:9008"
+} else {
+    "https://subscriptions.aerome.net"
+};
 pub const APP_NAME: &'static str = "aerome";
 pub const FILE_MANAGER_THEME_NAME: &'static str = "AeromeFileManager";
 

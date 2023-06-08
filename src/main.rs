@@ -107,6 +107,9 @@ fn main() -> wry::Result<()> {
                 proxy.send_event(UserEvent::UpdateSettings {
                     settings: store.get_settings()
                 });
+                proxy.send_event(UserEvent::SetSubscriptionsServer(SubscriptionServer {
+                    url: constants::SUBSCRIPTIONS_SERVER_URL.to_string()
+                }));
             },
             Cmd::Compress { files, to } => {
                 let current_path = location.current_path();
@@ -322,6 +325,12 @@ fn main() -> wry::Result<()> {
                 let stringified = serde_json::to_string(&progress).unwrap();
                 webview.evaluate_script(&format!("notifyFileTransferProgress({})", &stringified)).unwrap();
             },
+
+            Event::UserEvent(UserEvent::SetSubscriptionsServer(server)) => {
+                let stringified = serde_json::to_string(&server).unwrap();
+                webview.evaluate_script(&format!("setSubscriptionServer({})", &stringified)).unwrap();
+
+            },
     
             Event::UserEvent(UserEvent::UpdateThumbnail { thumbnail }) => {
                 let stringified = serde_json::to_string(&thumbnail).unwrap();
@@ -480,7 +489,7 @@ async fn run_prompt(prompt_path: &str, input: &str, account: &Account) -> String
         Account::Direct(key) => (Some(key.0.clone()), None),
         Account::Aerome(AccountAerome { key, .. }) => (
             Some(key.clone()),
-            Some(constants::BACKEND_URL.to_owned())
+            Some(constants::SUBSCRIPTIONS_SERVER_URL.to_owned())
         ),
     };
 

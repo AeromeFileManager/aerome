@@ -1562,7 +1562,7 @@
     </div>
 
     <script>
-        const ACCOUNTS_SERVER = new URL('http://localhost:9008');
+        let SUBSCRIPTIONS_SERVER = new URL('http://localhost:9008');
 
         window.future = {
             settings: {
@@ -1615,6 +1615,10 @@
                     document.getElementById('files').style.setProperty('--grid-scale', scale);
                 }
             }
+        };
+
+        window.setSubscriptionsServer = ({ url }) => {
+            SUBSCRIPTIONS_SERVER = url;
         };
 
         let lastUserMessage = '';
@@ -2235,7 +2239,7 @@
             showProgressBar(e.target);
 
             const formData = new FormData(e.target);
-            const url = new URL('/auth/login', ACCOUNTS_SERVER);
+            const url = new URL('/auth/login', SUBSCRIPTIONS_SERVER);
             const params = new URLSearchParams(formData);
             const response = await (async function() {
                 try {
@@ -2317,7 +2321,7 @@
 
             const formData = new FormData(e.target);
             try {
-                const url = new URL('/auth/signup', ACCOUNTS_SERVER);
+                const url = new URL('/auth/signup', SUBSCRIPTIONS_SERVER);
                 const params = new URLSearchParams(formData);
                 const response = await fetch(url, {
                     method: 'POST',
@@ -2332,7 +2336,7 @@
                         hideSLForm(e.target);
                         showSLForm(paymentFrame);
                     };
-                    const url = new URL(ACCOUNTS_SERVER);
+                    const url = new URL(SUBSCRIPTIONS_SERVER);
                     url.search = new URLSearchParams([ [ 'key', key ], [ 'email', email ] ]);
                     paymentFrame.src = url;
                     const aerome = {
@@ -2372,7 +2376,7 @@
         });
 
         window.addEventListener('message', event => {
-            if (!('' + ACCOUNTS_SERVER).startsWith(event.origin)) return;
+            if (!('' + SUBSCRIPTIONS_SERVER).startsWith(event.origin)) return;
 
             switch (event.data) {
                 case 'success': {
@@ -2405,7 +2409,7 @@
 
             const response = await (async function () {
                 try {
-                    return await fetch(new URL('/payment/subscription', ACCOUNTS_SERVER), {
+                    return await fetch(new URL('/payment/subscription', SUBSCRIPTIONS_SERVER), {
                         headers: {
                             'aerome-email': email,
                             'aerome-key': key
@@ -2419,7 +2423,7 @@
             const transitionToPayment = () => {
                 hideSLForm(aeromeAccountInformationEl);
                 const paymentFrame = document.getElementById('stripe-payment');
-                const url = new URL(ACCOUNTS_SERVER);
+                const url = new URL(SUBSCRIPTIONS_SERVER);
                 url.search = new URLSearchParams([ [ 'key', key ], [ 'email', email ] ]);
                 paymentFrame.src = url;
                 paymentFrame.onload = () => {
@@ -2498,7 +2502,7 @@
                             }
 
                             try {
-                                const response = await fetch(new URL('/payment/subscription', ACCOUNTS_SERVER), {
+                                const response = await fetch(new URL('/payment/subscription', SUBSCRIPTIONS_SERVER), {
                                     method: 'DELETE',
                                     headers: {
                                         'aerome-email': email,
