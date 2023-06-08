@@ -15,16 +15,19 @@
  */
 
 use std::fs;
+use std::process::Command;
 use std::path::{PathBuf,Path};
 use chrono::{DateTime,Utc,TimeZone};
 use dirs;
-
-// https://specifications.freedesktop.org/trash-spec/trashspec-latest.html
-// This is a piss poor implementation of the above spec, but will do for now
+use crate::constants::APP_NAME;
 
 pub struct Trash {}
 
+#[cfg(target_os = "linux")]
 impl Trash {
+    // https://specifications.freedesktop.org/trash-spec/trashspec-latest.html
+    // This is a piss poor implementation of the above spec, but will do for now
+
     pub fn new() -> Trash {
         Trash {}
     }
@@ -84,6 +87,34 @@ impl Trash {
             }
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+impl Trash {
+    // TODO: Finish this implementation. I found a script that'll use the Mac OS Finder API's to put
+    // items in the trash, but cannot find ways to pull items out. For now this is ok, because the
+    // trash icon is a permanent fixture on the Mac OS dock, and the trash page in Aerome is a bit
+    // of a hidden feature given we don't have a sidebar or a menu bar yet that would point to it.
+    // It's a good stopping point, but I'll have to revisit this later when Aerome is a little more
+    // polished.
+
+    pub fn new() -> Trash {
+        Trash {}
+    }
+
+    pub fn put(&self, paths: &[PathBuf]) {
+        let scripts_dir = dirs::data_local_dir().unwrap().join(APP_NAME).join("scripts");
+
+        Command::new(scripts_dir.join("trash.sh"))
+            .args(paths)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .spawn()
+            .unwrap();
+    }
+
+    pub fn restore(&self, paths: &[String]) {}
+    pub fn clear(&self, paths: Option<&[String]>) {}
 }
 
 fn find_unique_path(path: &Path) -> (PathBuf, PathBuf) {

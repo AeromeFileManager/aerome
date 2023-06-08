@@ -15,8 +15,12 @@
  */
 
 use std::fs;
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use std::process::Command;
 pub use super::prompts::*;
+
 
 pub const BACKEND_URL: &'static str = "http://localhost:9008";
 pub const APP_NAME: &'static str = "aerome";
@@ -150,10 +154,14 @@ pub const COMMON_MIME_TYPES: [&str; 29] = [
     "text-css",
 ];
 
+pub const SCRIPT_MAC_OS_TRASH: &'static [u8] =
+    include_bytes!("../assets/scripts/mac_os/trash.sh");
+
 pub fn install() {
     install_icons();
     install_prompts();
     install_desktop_files();
+    install_scripts();
 
     if cfg!(target_os = "linux") {
         if let Ok(exe_path) = std::env::current_exe() {
@@ -164,6 +172,23 @@ pub fn install() {
         }
         let _ = Command::new("update-desktop-database").output();
     }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn install_scripts() {}
+
+#[cfg(target_os = "macos")]
+fn install_scripts() {
+    let scripts_dir = dirs::data_local_dir().unwrap().join(APP_NAME).join("scripts");
+    let trash_script = scripts_dir.join("trash.sh");
+
+    fs::create_dir_all(&scripts_dir).expect("Could not write to the apps data directory");
+    fs::write(&trash_script, &SCRIPT_MAC_OS_TRASH).unwrap();
+
+    let mut permissions = trash_script.metadata().unwrap().permissions();
+    permissions.set_mode(0o755); // set permission bits to allow execution
+
+    fs::set_permissions(trash_script, permissions).unwrap();
 }
 
 #[cfg(target_os = "linux")]
