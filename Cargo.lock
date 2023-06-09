@@ -30,6 +30,7 @@ dependencies = [
  "fs_extra",
  "http",
  "image",
+ "lazy_static",
  "log",
  "md5",
  "mime",

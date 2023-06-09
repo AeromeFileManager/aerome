@@ -19,13 +19,18 @@ use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
+use std::env;
 pub use super::prompts::*;
 
-pub const SUBSCRIPTIONS_SERVER_URL: &'static str = if cfg!(debug_assertions) {
-    "http://localhost:9008"
-} else {
-    "https://subscriptions.aerome.net"
-};
+lazy_static! {
+    pub static ref SUBSCRIPTIONS_SERVER_URL: String =
+        match (cfg!(debug_assertions), env::var("AEROME_SUBSCRIPTIONS_SERVER")) {
+            (_, Ok(url)) => url.to_string(),
+            (true, _) => "http://localhost:9008".to_string(),
+            (false, _) => "https://subscriptions.aerome.net".to_string(),
+        };
+}
+
 pub const APP_NAME: &'static str = "aerome";
 pub const FILE_MANAGER_THEME_NAME: &'static str = "AeromeFileManager";
 

@@ -14,6 +14,9 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+#[macro_use]
+extern crate lazy_static;
+
 mod constants;
 mod ipc;
 mod models;
@@ -328,7 +331,7 @@ fn main() -> wry::Result<()> {
 
             Event::UserEvent(UserEvent::SetSubscriptionsServer(server)) => {
                 let stringified = serde_json::to_string(&server).unwrap();
-                webview.evaluate_script(&format!("setSubscriptionServer({})", &stringified)).unwrap();
+                webview.evaluate_script(&format!("setSubscriptionsServer({})", &stringified)).unwrap();
 
             },
     
